@@ -30,7 +30,9 @@ function pos_record_query(string $sql, float $started): void {
 
 class PosStatement extends PDOStatement {
     protected function __construct() {}
-    public function execute(?array $params = null): bool {
+    // PHP 7.4's PDO parameter is untyped; keep the override contravariant on
+    // both that version and PHP 8's nullable-array signature.
+    public function execute($params = null): bool {
         $started = microtime(true);
         try {
             return parent::execute($params);
