@@ -1,7 +1,8 @@
 <?php
 require __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/service-charge.php';
-require __DIR__ . '/includes/order-numbers.php';
+require __DIR__ . '/includes/order-workflow.php';
+require_once __DIR__ . '/includes/order-numbers.php';
 require __DIR__ . '/includes/receipt-templates.php';
 
 require_login();
@@ -23,45 +24,12 @@ if (($_POST['service_charge_version'] ?? '') !== '1') {
 $pdo = null;
 $savedOrderId = 0;
 try {
-    $day = active_day();
-    if (!$day) close_print_fail('სამუშაო დღე დახურულია.', 409);
-
-    $tableId = (int)($_POST['table_id'] ?? 0);
-    $table = fetch_table($tableId);
-    if (!$table) close_print_fail('მაგიდა ვერ მოიძებნა.', 404);
-
-    $order = current_open_order((int)$day['id'], $tableId);
-    if (!$order) close_print_fail('ამ მაგიდაზე ღია შეკვეთა არ არის. გადაამოწმე ისტორია.', 409);
-    $orderId = (int)$order['id'];
-    if (isset($_POST['expected_order_id']) && (int)$_POST['expected_order_id'] !== $orderId) {
-        close_print_fail('მაგიდის შეკვეთა შეიცვალა. განაახლე გვერდი და გადაამოწმე.', 409);
-    }
-    if (unsent_items_count($orderId) > 0) {
-        close_print_fail('ამ მაგიდაზე არის გაუგზავნელი პროდუქცია — ჯერ გაგზავნე შეკვეთა.', 409);
-    }
-    $subtotal = order_total($orderId);
-    if ($subtotal <= 0) close_print_fail('ამ მაგიდას ჯამი 0.00 ₾ აქვს — გამოიყენე „ნულით დახურვა“.', 409);
-    if (isset($_POST['expected_subtotal']) && pos_money_tetri($_POST['expected_subtotal']) !== pos_money_tetri($subtotal)) {
-        close_print_fail('შეკვეთის თანხა შეიცვალა. განაახლე გვერდი და თავიდან შეამოწმე გადასახდელი თანხა.', 409);
-    }
-
-    $price = pos_price_order($subtotal, pos_is_takeaway($table), $_POST);
-    $pdo = db();
-    $pdo->beginTransaction();
-    // Save service inside total. Existing subtotal/discount columns preserve the
-    // breakdown, without changing the database schema or adding a query.
-    $stmt = $pdo->prepare("UPDATE orders SET status='closed', subtotal_total=?, total=?, discount_type=?, discount_value=?, discount_amount=?, payment_type=?, cash_amount=?, card_amount=?, closed_at=NOW() WHERE id=? AND status='open'");
-    $stmt->execute([$price['subtotal_total'], $price['total'], $price['discount_type'], $price['discount_value'], $price['discount_amount'], $price['payment_type'], $price['cash_amount'], $price['card_amount'], $orderId]);
-    if ($stmt->rowCount() !== 1) {
-        $pdo->rollBack();
-        close_print_fail('მაგიდა უკვე დაიხურა. გადაამოწმე ისტორია.', 409);
-    }
-    $pdo->commit();
+    $closed = pos_close_order((int)($_POST['table_id'] ?? 0), $_POST);
+    $closedOrder = $closed['order'];
+    $table = $closed['table'];
+    $items = $closed['items'];
+    $orderId = (int)$closedOrder['id'];
     $savedOrderId = $orderId;
-
-    $closedOrder = fetch_order($orderId);
-    if (!$closedOrder) throw new RuntimeException('Saved order not found.');
-    $items = order_items($orderId);
     $receiptNumber = receipt_number_for_order($closedOrder);
     $template = receipt_template('final');
     $result = [
@@ -81,7 +49,7 @@ try {
     close_print_fail($e->getMessage(), 422);
 } catch (Throwable $e) {
     if ($pdo instanceof PDO && $pdo->inTransaction()) $pdo->rollBack();
-    error_log('GARBALIA close order: ' . $e->getMessage());
+    pos_record_error($e);
     if ($savedOrderId > 0) {
         close_print_fail('მაგიდა დაიხურა, მაგრამ ქვითრის მომზადება ვერ მოხერხდა. ქვითარი გახსენი ისტორიიდან; მაგიდის ხელახლა დახურვა საჭირო არ არის.', 500);
     }

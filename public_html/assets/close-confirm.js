@@ -239,7 +239,7 @@ function isHistoryPage() {
 function formatDateForUrl(date) { return date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0'); }
 function historyUrl(from, to) {
   const params = new URLSearchParams(window.location.search);
-  ['page','order_id','payment','status','item_filter','product','export'].forEach(function (key) { params.delete(key); });
+  ['page','p','order_id','payment','status','item_filter','product','export'].forEach(function (key) { params.delete(key); });
   params.set('from', from); params.set('to', to);
   const query = params.toString();
   return '/history' + (query ? '?' + query : '');
@@ -279,8 +279,8 @@ function enhanceHistoryPage() {
   if (actions && !actions.dataset.garbaliaExtraFilters) {
     actions.dataset.garbaliaExtraFilters = '1'; actions.classList.add('history-clean-actions');
     const searchBtn = document.querySelector('.history-filters form button[type="submit"], .history-filters form button.btn.primary');
-    if (searchBtn) { searchBtn.classList.add('primary'); searchBtn.textContent = 'ძებნა'; actions.insertBefore(searchBtn, actions.firstChild); }
-    const today = new Date(); const last7 = new Date(today); last7.setDate(today.getDate() - 6); const prevMonthStart = new Date(today.getFullYear(), today.getMonth()-1, 1); const prevMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0); const yearStart = new Date(today.getFullYear(), 0, 1);
+    if (searchBtn) { searchBtn.classList.add('primary'); searchBtn.textContent = 'ძებნა'; const form = searchBtn.closest('form'); if (form) { form.id = 'history-filter-form'; searchBtn.setAttribute('form', form.id); } actions.insertBefore(searchBtn, actions.firstChild); }
+    const today = new Date((document.body.dataset.businessDate || formatDateForUrl(new Date())) + 'T12:00:00'); const last7 = new Date(today); last7.setDate(today.getDate() - 6); const prevMonthStart = new Date(today.getFullYear(), today.getMonth()-1, 1); const prevMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0); const yearStart = new Date(today.getFullYear(), 0, 1);
     const buttons = [['წინა თვეში', historyUrl(formatDateForUrl(prevMonthStart), formatDateForUrl(prevMonthEnd))], ['ამ წელში', historyUrl(formatDateForUrl(yearStart), formatDateForUrl(today))], ['ბოლო 7 დღეში', historyUrl(formatDateForUrl(last7), formatDateForUrl(today))]];
     const excel = actions.querySelector('a[href*="export=excel"]');
     buttons.forEach(function (item) { const a = document.createElement('a'); a.className = 'btn'; a.href = item[1]; a.textContent = item[0]; if (excel) actions.insertBefore(a, excel); else actions.appendChild(a); });

@@ -72,7 +72,5 @@ try {
 
     render_footer();
 } catch (Throwable $e) {
-    render_header('შეცდომა');
-    echo '<section class="card narrow error"><h1>შეცდომა</h1><p>სამუშაო დღის ჩატვირთვა ვერ მოხერხდა.</p><pre>'.h($e->getMessage()).'</pre></section>';
-    render_footer();
+    pos_render_error($e);
 }

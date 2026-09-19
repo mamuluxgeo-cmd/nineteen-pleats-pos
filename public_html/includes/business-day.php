@@ -15,7 +15,7 @@ function garbalia_business_cutoff_hour(): int {
 
 function garbalia_business_date(?DateTimeInterface $moment = null): string {
     $date = $moment
-        ? DateTimeImmutable::createFromInterface($moment)
+        ? new DateTimeImmutable($moment->format('Y-m-d H:i:s.u'), $moment->getTimezone())
         : new DateTimeImmutable('now');
 
     return $date

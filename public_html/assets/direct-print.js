@@ -98,16 +98,11 @@
       button.textContent = 'იგზავნება…';
     }
 
-    fetch('/send_order_print.php', {
+    window.garbaliaActionRequest('/send_order_print.php', {
       method: 'POST',
       body: new FormData(form),
       credentials: 'same-origin',
       headers: {'Accept':'application/json'}
-    }).then(function (response) {
-      return response.json().catch(function () { return {ok:false,message:'სერვერის პასუხი ვერ დამუშავდა.'}; }).then(function (data) {
-        if (!response.ok || !data.ok) throw new Error(data.message || 'შეკვეთის გაგზავნა ვერ მოხერხდა.');
-        return data;
-      });
     }).then(function (data) {
       printWindow.document.open();
       printWindow.document.write(printDocument(data));
@@ -117,7 +112,7 @@
       try { printWindow.close(); } catch (closeError) {}
       form.dataset.directPrinting = '0';
       if (button) {
-        button.disabled = false;
+        button.disabled = !!window.garbaliaOutcomeUnknown;
         button.textContent = originalText;
       }
       alert(error && error.message ? error.message : 'შეკვეთის გაგზავნა ვერ მოხერხდა.');
@@ -143,16 +138,11 @@
       button.textContent = 'იხურება…';
     }
 
-    fetch('/close_order_print.php', {
+    window.garbaliaActionRequest('/close_order_print.php', {
       method: 'POST',
       body: new FormData(form),
       credentials: 'same-origin',
       headers: {'Accept':'application/json'}
-    }).then(function (response) {
-      return response.json().catch(function () { return {ok:false,message:'სერვერის პასუხი ვერ დამუშავდა.'}; }).then(function (data) {
-        if (!response.ok || !data.ok) throw new Error(data.message || 'მაგიდის დახურვა ვერ მოხერხდა.');
-        return data;
-      });
     }).then(function (data) {
       const finalText = data.final && data.final.text ? data.final.text : '';
       const finalSize = Math.max(10, Math.min(18, Number(data.final && data.final.font_size) || 13));
@@ -165,7 +155,7 @@
       form.dataset.directClosePrinting = '0';
       form.dataset.garbaliaConfirmedClose = '0';
       if (button) {
-        button.disabled = false;
+        button.disabled = !!window.garbaliaOutcomeUnknown;
         button.textContent = originalText;
       }
       alert(error && error.message ? error.message : 'მაგიდის დახურვა ვერ მოხერხდა.');

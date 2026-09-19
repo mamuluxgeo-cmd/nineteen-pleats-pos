@@ -155,3 +155,7 @@ foreach (['json', 'legacy'] as $route) {
 test_equal($pdo->query('SHOW COLUMNS FROM orders')->fetchAll(), $columnsBefore, 'endpoints did not alter the orders schema');
 test_equal($pdo->query('SHOW COLUMNS FROM restaurant_tables')->fetchAll(), $tableColumns, 'endpoints did not alter the table schema');
 test_finish('Original-schema close endpoint integration');
+
+require __DIR__ . '/performance.php';
+
+if (getenv('POS_TEST_BENCHMARK') === '1') require __DIR__ . '/benchmark.php';

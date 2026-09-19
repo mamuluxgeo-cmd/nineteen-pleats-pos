@@ -1,8 +1,9 @@
 <?php
 require __DIR__ . '/includes/bootstrap.php';
-require __DIR__ . '/includes/order-numbers.php';
+require_once __DIR__ . '/includes/order-numbers.php';
 require __DIR__ . '/includes/receipt-templates.php';
 require_login();
+require_once __DIR__ . '/includes/business-day.php';
 
 $orderId = (int)($_GET['order_id'] ?? 0);
 $isReprint = (int)($_GET['reprint'] ?? 0) === 1;
@@ -14,9 +15,9 @@ if (!$order || ($order['status'] ?? '') !== 'closed') {
 }
 
 if (!is_admin()) {
-    $orderDate = date('Y-m-d', strtotime($order['closed_at'] ?: $order['created_at']));
-    $limitFrom = date('Y-m-d', strtotime('-6 days'));
-    if ($orderDate < $limitFrom || $orderDate > date('Y-m-d')) {
+    [$limitStart, $limitEnd] = garbalia_business_range(garbalia_business_date_shift(-6), garbalia_business_date());
+    $orderTime = $order['closed_at'] ?: $order['created_at'];
+    if ($orderTime < $limitStart || $orderTime > $limitEnd) {
         flash('მოლარეს ქვითრის ხელახლა ბეჭდვა მხოლოდ ბოლო 7 დღის ანგარიშებზე შეუძლია.', 'warn');
         redirect_to('history');
     }

@@ -1,6 +1,7 @@
 <?php
 require __DIR__ . '/includes/bootstrap.php';
-require __DIR__ . '/includes/order-numbers.php';
+require __DIR__ . '/includes/order-workflow.php';
+require_once __DIR__ . '/includes/order-numbers.php';
 require __DIR__ . '/includes/receipt-templates.php';
 
 require_login();
@@ -16,52 +17,17 @@ function json_fail(string $message, int $status = 400): void {
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') json_fail('არასწორი მოთხოვნა.', 405);
 
-$day = active_day();
-if (!$day) json_fail('სამუშაო დღე დახურულია.');
-
 $tableId = (int)($_POST['table_id'] ?? 0);
-$table = fetch_table($tableId);
-if (!$table) json_fail('მაგიდა ვერ მოიძებნა.');
-
-$pdo = db();
 try {
-    $pdo->beginTransaction();
-
-    $orderStmt = $pdo->prepare(
-        "SELECT * FROM orders WHERE business_day_id=? AND table_id=? AND status='open' ORDER BY id DESC LIMIT 1 FOR UPDATE"
-    );
-    $orderStmt->execute([(int)$day['id'], $tableId]);
-    $order = $orderStmt->fetch();
-    if (!$order) {
-        $pdo->rollBack();
-        json_fail('ამ მაგიდაზე შეკვეთა აღარ არის.', 409);
-    }
-
-    $stmt = $pdo->prepare(
-        'SELECT * FROM order_items WHERE order_id=? AND is_cancelled=0 AND sent_at IS NULL ORDER BY id ASC FOR UPDATE'
-    );
-    $stmt->execute([(int)$order['id']]);
-    $items = $stmt->fetchAll();
-    if (!$items) {
-        $pdo->rollBack();
-        json_fail('ახალი გასაგზავნი პროდუქტი არ არის.', 409);
-    }
-
-    $ids = array_map(static function ($item) { return (int)$item['id']; }, $items);
-    $sql = 'UPDATE order_items SET sent_at=NOW() WHERE id IN ('
-        . implode(',', array_fill(0, count($ids), '?'))
-        . ') AND sent_at IS NULL AND is_cancelled=0';
-    $update = $pdo->prepare($sql);
-    $update->execute($ids);
-
-    if ($update->rowCount() !== count($ids)) {
-        throw new RuntimeException('Some order items changed during sending.');
-    }
-
-    $pdo->commit();
-} catch (Throwable $e) {
-    if ($pdo->inTransaction()) $pdo->rollBack();
-    json_fail('შეკვეთის გაგზავნა ვერ მოხერხდა. განაახლე გვერდი და სცადე თავიდან.', 500);
+    $sent = pos_send_order($tableId);
+    $order = $sent['order'];
+    $table = $sent['table'];
+    $items = $sent['items'];
+} catch (InvalidArgumentException $error) {
+    json_fail($error->getMessage(), 409);
+} catch (Throwable $error) {
+    pos_render_error($error);
+    exit;
 }
 
 $receiptNumber = receipt_number_for_order($order);

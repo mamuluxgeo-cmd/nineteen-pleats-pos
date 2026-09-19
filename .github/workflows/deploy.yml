@@ -25,25 +25,26 @@ concurrency:
 
 jobs:
   test:
-    name: PHP ${{ matrix.php }} / isolated service charge regressions
+    name: PHP ${{ matrix.php }} / ${{ matrix.database }} regressions
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         php: ['7.4', '8.3']
+        database: ['mariadb:10.11', 'mysql:8.0']
     services:
       mariadb:
-        image: mariadb:10.11
+        image: ${{ matrix.database }}
         env:
-          MARIADB_DATABASE: pos_test
-          MARIADB_USER: pos_test
-          MARIADB_PASSWORD: pos-test-only
-          MARIADB_ROOT_PASSWORD: pos-test-root-only
+          MYSQL_DATABASE: pos_test
+          MYSQL_USER: pos_test
+          MYSQL_PASSWORD: pos-test-only
+          MYSQL_ROOT_PASSWORD: pos-test-root-only
         ports:
           - 3306/tcp
         options: >-
-          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-cmd="mysqladmin ping -h127.0.0.1 -upos_test -ppos-test-only --silent"
           --health-interval=5s
           --health-timeout=5s
           --health-retries=20
@@ -71,6 +72,7 @@ jobs:
           done < <(find public_html tests -type f -name '*.php' -print0)
           php tests/pricing.php
           php tests/receipts.php
+          php tests/business-day.php
 
       - name: JavaScript syntax and money regressions
         run: |
@@ -79,6 +81,7 @@ jobs:
             node --check "$file"
           done < <(find public_html tests -type f -name '*.js' -print0)
           node tests/money.js
+          node tests/actions.js
 
       - name: Both close routes on the existing database schema
         env:
@@ -102,10 +105,15 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/pos-prerequisites/includes"
           cp public_html/includes/service-charge.php "$RUNNER_TEMP/pos-prerequisites/includes/service-charge.php"
+          cp public_html/includes/diagnostics.php "$RUNNER_TEMP/pos-prerequisites/includes/diagnostics.php"
+          cp public_html/includes/order-numbers.php "$RUNNER_TEMP/pos-prerequisites/includes/order-numbers.php"
+          cp public_html/includes/order-workflow.php "$RUNNER_TEMP/pos-prerequisites/includes/order-workflow.php"
+          cp public_html/includes/reporting.php "$RUNNER_TEMP/pos-prerequisites/includes/reporting.php"
+          cp public_html/includes/business-day.php "$RUNNER_TEMP/pos-prerequisites/includes/business-day.php"
 
       # A separate state file tracks ONLY this prerequisite. It does not reuse
       # the full site's sync state or delete files belonging to the main upload.
-      - name: Upload service-charge helper first
+      - name: Upload dependencies before their callers
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -135,29 +143,6 @@ jobs:
           server-dir: ${{ secrets.FTP_SERVER_DIR }}
           state-name: .pos-pricing-core-sync-state.json
 
-      - name: Create config.php from secrets
-        run: |
-          cat > public_html/config.php <<'PHP'
-          <?php
-          return [
-              'app_name' => 'ცხრამეტი ნაოჭი POS',
-              'restaurant_name' => 'ცხრამეტი ნაოჭი',
-              'restaurant_name_en' => 'Nineteen Pleats',
-              'restaurant_phone' => '598 01 83 83',
-              'restaurant_address' => '',
-              'thank_you_text' => 'გმადლობთ სტუმრობისთვის!',
-              'timezone' => 'Asia/Tbilisi',
-
-              'db_host' => 'localhost',
-              'db_name' => '${{ secrets.DB_NAME }}',
-              'db_user' => '${{ secrets.DB_USER }}',
-              'db_pass' => '${{ secrets.DB_PASSWORD }}',
-              'db_charset' => 'utf8mb4',
-
-              'cancel_password' => 'cancel123',
-          ];
-          PHP
-
       - name: Upload public_html to hosting
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
@@ -169,3 +154,5 @@ jobs:
           exclude: |
             **/.git*
             **/.git*/**
+            **/config.php
+            **/.runtime-*
