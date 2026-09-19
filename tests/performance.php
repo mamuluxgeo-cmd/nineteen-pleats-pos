@@ -187,7 +187,12 @@ test_equal(audit_request('add', ['table_id' => $dayTable, 'product_id' => $produ
 // Index migration is idempotent, and endpoints do not perform schema changes.
 $pdo->exec('ALTER TABLE orders DROP INDEX idx_orders_day_status_table');
 $pdo->exec('ALTER TABLE cash_movements DROP INDEX idx_cash_type_created');
-for ($i = 0; $i < 2; $i++) $pdo->exec(file_get_contents(__DIR__ . '/../database/migrations/2026-09-19-audit-indexes.sql'));
-test_equal((int)$pdo->query("SELECT COUNT(DISTINCT index_name) FROM information_schema.statistics WHERE table_schema=DATABASE() AND index_name IN ('idx_orders_day_status_table','idx_cash_type_created')")->fetchColumn(), 2, 'both indexes installed exactly once');
+$pdo->exec('ALTER TABLE orders DROP INDEX idx_orders_day_table_status, DROP INDEX idx_orders_status_closed');
+$pdo->exec('ALTER TABLE order_items DROP INDEX idx_items_order_active_sent');
+for ($i = 0; $i < 2; $i++) {
+    $pdo->exec(file_get_contents(__DIR__ . '/../database/migrations/2026-09-19-audit-indexes.sql'));
+    $pdo->exec(file_get_contents(__DIR__ . '/../database/migrations/2026-09-20-existing-schema-indexes.sql'));
+}
+test_equal((int)$pdo->query("SELECT COUNT(DISTINCT index_name) FROM information_schema.statistics WHERE table_schema=DATABASE() AND index_name IN ('idx_orders_day_status_table','idx_cash_type_created','idx_orders_day_table_status','idx_orders_status_closed','idx_items_order_active_sent')")->fetchColumn(), 5, 'all five indexes installed exactly once');
 echo 'Report fixture: 600 orders, ' . round($report['ms'], 1) . ' ms, ' . $report['peak_mb'] . " MiB PHP peak.\n";
 test_finish('Concurrency, report, timeout and page regressions');
