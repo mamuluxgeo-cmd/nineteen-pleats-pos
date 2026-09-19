@@ -3,7 +3,7 @@
 
   function esc(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
-      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[c];
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c];
     });
   }
 
@@ -13,11 +13,15 @@
 
   function ensureCloseForm(card, tableId) {
     if (!card || card.querySelector('.close-form')) return;
+    var head = document.querySelector('.page-head[data-order-id]');
+    var orderId = head ? Number(head.dataset.orderId) || 0 : 0;
+    var serviceRate = head ? head.dataset.serviceRate : '';
     card.insertAdjacentHTML('beforeend',
       '<hr><h2>მაგიდის დახურვა</h2>' +
-      '<form class="close-form" method="post">' +
+      '<form class="close-form" method="post" data-service-rate="' + esc(serviceRate) + '">' +
       '<input type="hidden" name="action" value="close_order">' +
       '<input type="hidden" name="table_id" value="' + esc(tableId) + '">' +
+      '<input type="hidden" name="expected_order_id" value="' + orderId + '">' +
       '<label>გადახდის ტიპი<select id="payment_type" name="payment_type"><option value="cash">ნაღდი</option><option value="card">ბარათი</option><option value="mixed">შერეული</option></select></label>' +
       '<div id="mixed_fields" class="mixed-fields"><label>ნაღდი<input name="cash_amount" type="number" step="0.01" min="0"></label><label>ბარათი<input name="card_amount" type="number" step="0.01" min="0"></label></div>' +
       '<button class="btn success">საბოლოო ანგარიში</button></form>'
@@ -56,7 +60,15 @@
     if (sendButton) sendButton.disabled = false;
 
     var totalBox = document.querySelector('.total-box');
-    if (totalBox && data.order) totalBox.textContent = money(data.order.total);
+    if (totalBox && data.order) {
+      totalBox.textContent = money(data.order.total);
+      totalBox.dataset.subtotal = (Number(data.order.total) || 0).toFixed(2);
+    }
+    if (data.order) {
+      var currentHead = document.querySelector('.page-head');
+      if (currentHead) currentHead.dataset.orderId = String(data.order.id);
+      card.querySelectorAll('input[name="expected_order_id"]').forEach(function (input) { input.value = String(data.order.id); });
+    }
 
     if (data.order && data.order.receipt_number > 0 && !document.querySelector('[data-open-receipt-number]')) {
       var head = document.querySelector('.page-head');
@@ -71,6 +83,7 @@
     }
 
     ensureCloseForm(card, tableId);
+    document.dispatchEvent(new CustomEvent('garbalia:order-updated'));
     if (typeof addCancelButton === 'function') addCancelButton();
 
     if (typeof markOrderItemStates === 'function') markOrderItemStates();

@@ -57,7 +57,7 @@ $hasDiscountAmount = true;
 $hasCashMovements = true;
 
 $discountSelect = $hasDiscountAmount ? 'COALESCE(discount_amount,0) discount_amount' : '0 discount_amount';
-$stmt = db()->prepare("SELECT id, table_id, total, {$discountSelect} FROM orders WHERE status='closed' AND COALESCE(closed_at,created_at) BETWEEN ? AND ?");
+$stmt = db()->prepare("SELECT id, table_id, status, subtotal_total, total, {$discountSelect} FROM orders WHERE status='closed' AND COALESCE(closed_at,created_at) BETWEEN ? AND ?");
 $stmt->execute([$startDateTime, $endDateTime]);
 $orders = $stmt->fetchAll();
 
@@ -65,13 +65,16 @@ $orderMap = [];
 $orderGross = [];
 $orderCost = [];
 $revenue = 0.0;
+$serviceTotal = 0.0;
 $discounts = 0.0;
 foreach ($orders as $order) {
     $orderId = (int)$order['id'];
     $orderMap[$orderId] = $order;
+    $orderMap[$orderId]['service_amount'] = pos_service_amount($order);
     $orderGross[$orderId] = 0.0;
     $orderCost[$orderId] = 0.0;
     $revenue += (float)$order['total'];
+    $serviceTotal += $orderMap[$orderId]['service_amount'];
     $discounts += (float)$order['discount_amount'];
 }
 
@@ -133,7 +136,8 @@ foreach ($items as $item) {
     $quantity = (float)$item['quantity'];
     $gross = $quantity * (float)$item['price'];
     $orderGrossTotal = (float)($orderGross[$orderId] ?? 0);
-    $orderRevenue = (float)$orderMap[$orderId]['total'];
+    // Service is not a product sale and must not inflate product profitability.
+    $orderRevenue = (float)$orderMap[$orderId]['total'] - (float)$orderMap[$orderId]['service_amount'];
     $factor = $orderGrossTotal > 0 ? ($orderRevenue / $orderGrossTotal) : 0;
     $productStats[$name]['qty'] += $quantity;
     $productStats[$name]['net_sales'] += $gross * $factor;
@@ -230,7 +234,9 @@ render_header('სტატისტიკა');
   </div>
 
   <section class="profit-grid">
-    <div class="profit-kpi"><span>გაყიდვა — <?= h($rangeLabel) ?></span><strong><?= money($revenue) ?></strong><small>ფასდაკლების შემდეგ მიღებული თანხა</small></div>
+    <div class="profit-kpi"><span>სულ მიღებული — <?= h($rangeLabel) ?></span><strong><?= money($revenue) ?></strong><small>ფასდაკლების შემდეგ, მომსახურების ჩათვლით</small></div>
+    <div class="profit-kpi light"><span>პროდუქტების გაყიდვა</span><strong><?= money($revenue - $serviceTotal) ?></strong><small>ფასდაკლების შემდეგ, მომსახურების გარეშე</small></div>
+    <div class="profit-kpi light"><span>მომსახურება</span><strong><?= money($serviceTotal) ?></strong><small>არჩეულ პერიოდში მიღებული მომსახურების თანხა</small></div>
     <div class="profit-kpi cost"><span>პროდუქტების თვითღირებულება</span><strong><?= money($costTotal) ?></strong><small>გაყიდული რაოდენობა × შენახული Cost</small></div>
     <div class="profit-kpi profit"><span>მთლიანი მოგება</span><strong><?= money($grossProfit) ?></strong><small>მარჟა: <?= h($marginText) ?></small></div>
     <div class="profit-kpi result <?= $netResult < 0 ? 'negative' : '' ?>"><span>საბოლოო შედეგი</span><strong><?= money($netResult) ?></strong><small>მოგება − სალაროში დაფიქსირებული ხარჯები</small></div>
@@ -254,7 +260,7 @@ render_header('სტატისტიკა');
   <section class="statistics-stack">
     <div class="card stat-card">
       <h2>პროდუქტების მოგება — <?= h($rangeLabel) ?></h2>
-      <p class="stat-card-note">ფასდაკლება პროდუქტებზე ნაწილდება მათი გაყიდვის წილის მიხედვით, ამიტომ ცხრილში ნაჩვენებია ფასდაკლების შემდეგ დარჩენილი შემოსავალი.</p>
+      <p class="stat-card-note">ფასდაკლება პროდუქტებზე ნაწილდება მათი გაყიდვის წილის მიხედვით. მომსახურება პროდუქტის გაყიდვასა და მოგებაში არ შედის.</p>
       <?php if (!$topProducts): ?>
         <div class="empty-stat">ამ პერიოდზე პროდუქტის გაყიდვა ჯერ არ არის.</div>
       <?php else: ?>
@@ -273,7 +279,7 @@ render_header('სტატისტიკა');
 
     <div class="card stat-card">
       <h2>მაგიდების შედეგი — <?= h($rangeLabel) ?></h2>
-      <p class="stat-card-note">თითო მაგიდაზე ნაჩვენებია გაყიდვა, პროდუქტის თვითღირებულება და მთლიანი მოგება.</p>
+      <p class="stat-card-note">თითო მაგიდაზე ნაჩვენებია მიღებული თანხა მომსახურების ჩათვლით, პროდუქტის თვითღირებულება და მთლიანი მოგება.</p>
       <?php if (!$tableStats): ?>
         <div class="empty-stat">მაგიდები ვერ მოიძებნა.</div>
       <?php else: ?>

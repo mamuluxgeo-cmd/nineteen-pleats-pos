@@ -18,9 +18,11 @@ try {
     $dayId = (int)$day['id'];
 
     // One orders aggregate replaces day_summary() + open_orders_count().
+    $serviceAmountSql = pos_service_amount_sql();
     $stmt = db()->prepare(
         "SELECT
             COALESCE(SUM(CASE WHEN status='closed' THEN total ELSE 0 END),0) AS sales_total,
+            COALESCE(SUM({$serviceAmountSql}),0) AS service_total,
             COALESCE(SUM(CASE WHEN status='closed' THEN cash_amount ELSE 0 END),0) AS cash_total,
             COALESCE(SUM(CASE WHEN status='closed' THEN card_amount ELSE 0 END),0) AS card_total,
             COALESCE(SUM(CASE WHEN status='open' THEN 1 ELSE 0 END),0) AS open_orders
@@ -40,6 +42,7 @@ try {
     }
 
     $salesTotal = (float)($summary['sales_total'] ?? 0);
+    $serviceTotal = (float)($summary['service_total'] ?? 0);
     $cashTotal = (float)($summary['cash_total'] ?? 0);
     $cardTotal = (float)($summary['card_total'] ?? 0);
     $openOrders = (int)($summary['open_orders'] ?? 0);
@@ -47,6 +50,7 @@ try {
 
     echo '<div class="page-head"><div><h1>დღე გახსნილია</h1><p class="muted">გახსნა: '.h($day['opened_at']).'</p></div><a class="btn primary" href="'.h(url_for('tables')).'">მაგიდებზე გადასვლა</a></div>';
     echo '<section class="stats"><div><span>გაყიდვები</span><strong>'.money($salesTotal).'</strong></div><div><span>ნაღდი ნავაჭრი</span><strong>'.money($cashTotal).'</strong></div><div><span>ბარათი</span><strong>'.money($cardTotal).'</strong></div><div><span>სალაროს მოძრაობა</span><strong>'.money($cashNet).'</strong></div><div><span>მოსალოდნელი ნაღდი</span><strong>'.money($expectedCash).'</strong></div><div><span>ღია მაგიდები</span><strong>'.$openOrders.'</strong></div></section>';
+    echo '<section class="stats"><div><span>პროდუქტები — ფასდაკლების შემდეგ</span><strong>'.money($salesTotal - $serviceTotal).'</strong></div><div><span>მომსახურება</span><strong>'.money($serviceTotal).'</strong></div><div><span>სულ მიღებული</span><strong>'.money($salesTotal).'</strong></div></section>';
 
     echo '<section class="two-col reports day-cash-layout"><div class="card"><h2>სალაროს მოძრაობა</h2><p class="muted">ჩაწერე თანხის დამატება, ამოღება ან ყოველდღიური ხარჯი — დღის დახურვისას ეს ავტომატურად გაითვალისწინება.</p><form class="stack" method="post"><input type="hidden" name="action" value="cash_movement"><label>ტიპი<select name="movement_type"><option value="add">თანხის დამატება სალაროში</option><option value="remove">თანხის ამოღება სალაროდან</option><option value="expense">ხარჯის ჩაწერა</option></select></label><label>თანხა<input type="number" step="0.01" min="0" name="amount" required></label><label>კომენტარი<input name="note" placeholder="მაგ: პროდუქტის შეძენა, კურიერი..."></label><button class="btn success">ჩაწერა</button></form></div><div class="card"><h2>დღევანდელი ჩანაწერები</h2>';
 

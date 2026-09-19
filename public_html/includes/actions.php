@@ -226,68 +226,55 @@ function handle_post_action(): void {
     }
 
     if ($action === 'close_order') {
-        $day = active_day();
-        if (!$day) {
-            flash('სამუშაო დღე დახურულია.', 'warn');
-            redirect_to('day');
-        }
-        ensure_order_discount_columns();
+        require_once __DIR__ . '/service-charge.php';
         $tableId = (int)($_POST['table_id'] ?? 0);
-        $order = current_open_order((int)$day['id'], $tableId);
-        if (!$order) {
-            flash('ამ მაგიდაზე ღია შეკვეთა არ არის.', 'warn');
-            redirect_to('tables');
-        }
-        if (unsent_items_count((int)$order['id']) > 0) {
-            flash('ამ მაგიდაზე არის გაუგზავნელი პროდუქცია — ჯერ გაგზავნე შეკვეთა და შემდეგ დახურე მაგიდა.', 'warn');
+        if (($_POST['service_charge_version'] ?? '') !== '1') {
+            flash('სისტემა განახლდა — განაახლე გვერდი და ხელახლა დაადასტურე ანგარიში.', 'warn');
             redirect_to('table', ['id' => $tableId]);
         }
-        $subtotal = order_total((int)$order['id']);
-        if ($subtotal <= 0) {
-            flash('ამ მაგიდას ჯამი 0.00 ₾ აქვს — გამოიყენე „ნულით დახურვა“.', 'warn');
-            redirect_to('table', ['id' => $tableId]);
-        }
-
-        $discountType = 'none';
-        $discountValue = 0.0;
-        $discountAmount = 0.0;
-        if (($_POST['discount_enabled'] ?? '') === '1') {
-            $requestedType = $_POST['discount_type'] ?? 'percent';
-            $requestedValue = max(0, (float)($_POST['discount_value'] ?? 0));
-            if ($requestedType === 'percent') {
-                $discountType = 'percent';
-                $discountValue = min(100, $requestedValue);
-                $discountAmount = round($subtotal * $discountValue / 100, 2);
-            } elseif ($requestedType === 'amount') {
-                $discountType = 'amount';
-                $discountValue = min($subtotal, $requestedValue);
-                $discountAmount = round($discountValue, 2);
+        try {
+            $day = active_day();
+            if (!$day) {
+                flash('სამუშაო დღე დახურულია.', 'warn');
+                redirect_to('day');
             }
-        }
-        $discountAmount = min($subtotal, max(0, $discountAmount));
-        $total = round(max(0, $subtotal - $discountAmount), 2);
-
-        $paymentType = $_POST['payment_type'] ?? 'cash';
-        if (!in_array($paymentType, ['cash', 'card', 'mixed'], true)) {
-            $paymentType = 'cash';
-        }
-        if ($paymentType === 'cash') {
-            $cash = $total;
-            $card = 0;
-        } elseif ($paymentType === 'card') {
-            $cash = 0;
-            $card = $total;
-        } else {
-            $cash = max(0, (float)($_POST['cash_amount'] ?? 0));
-            $card = max(0, (float)($_POST['card_amount'] ?? 0));
-            if (abs(($cash + $card) - $total) > 0.01) {
-                flash('შერეულ გადახდაში ნაღდი + ბარათი უნდა უდრიდეს საბოლოო ჯამს.', 'warn');
-                redirect_to('table', ['id' => $tableId]);
+            $table = fetch_table($tableId);
+            if (!$table) {
+                flash('მაგიდა ვერ მოიძებნა.', 'warn');
+                redirect_to('tables');
             }
+            $order = current_open_order((int)$day['id'], $tableId);
+            if (!$order) {
+                flash('ამ მაგიდაზე ღია შეკვეთა არ არის. გადაამოწმე ისტორია.', 'warn');
+                redirect_to('tables');
+            }
+            if (isset($_POST['expected_order_id']) && (int)$_POST['expected_order_id'] !== (int)$order['id']) {
+                throw new InvalidArgumentException('მაგიდის შეკვეთა შეიცვალა. განაახლე გვერდი და გადაამოწმე.');
+            }
+            if (unsent_items_count((int)$order['id']) > 0) {
+                throw new InvalidArgumentException('ამ მაგიდაზე არის გაუგზავნელი პროდუქცია — ჯერ გაგზავნე შეკვეთა და შემდეგ დახურე მაგიდა.');
+            }
+            $subtotal = order_total((int)$order['id']);
+            if ($subtotal <= 0) {
+                throw new InvalidArgumentException('ამ მაგიდას ჯამი 0.00 ₾ აქვს — გამოიყენე „ნულით დახურვა“.');
+            }
+            if (isset($_POST['expected_subtotal']) && pos_money_tetri($_POST['expected_subtotal']) !== pos_money_tetri($subtotal)) {
+                throw new InvalidArgumentException('შეკვეთის თანხა შეიცვალა. განაახლე გვერდი და თავიდან შეამოწმე გადასახდელი თანხა.');
+            }
+            $price = pos_price_order($subtotal, pos_is_takeaway($table), $_POST);
+            $stmt = db()->prepare("UPDATE orders SET status='closed', subtotal_total=?, total=?, discount_type=?, discount_value=?, discount_amount=?, payment_type=?, cash_amount=?, card_amount=?, closed_at=NOW() WHERE id=? AND status='open'");
+            $stmt->execute([$price['subtotal_total'], $price['total'], $price['discount_type'], $price['discount_value'], $price['discount_amount'], $price['payment_type'], $price['cash_amount'], $price['card_amount'], $order['id']]);
+            if ($stmt->rowCount() !== 1) {
+                throw new InvalidArgumentException('მაგიდა უკვე დაიხურა. გადაამოწმე ისტორია.');
+            }
+            redirect_to('print_final', ['order_id' => (int)$order['id']]);
+        } catch (InvalidArgumentException $e) {
+            flash($e->getMessage(), 'warn');
+        } catch (Throwable $e) {
+            error_log('GARBALIA legacy close order: ' . $e->getMessage());
+            flash('მაგიდის დახურვა ვერ დადასტურდა. ხელახალ დაჭერამდე გადაამოწმე მაგიდა ან ისტორია.', 'warn');
         }
-        $stmt = db()->prepare("UPDATE orders SET status='closed', subtotal_total=?, total=?, discount_type=?, discount_value=?, discount_amount=?, payment_type=?, cash_amount=?, card_amount=?, closed_at=NOW() WHERE id=?");
-        $stmt->execute([$subtotal, $total, $discountType, $discountValue, $discountAmount, $paymentType, $cash, $card, $order['id']]);
-        redirect_to('print_final', ['order_id' => (int)$order['id']]);
+        redirect_to('table', ['id' => $tableId]);
     }
 
     if ($action === 'save_product') {

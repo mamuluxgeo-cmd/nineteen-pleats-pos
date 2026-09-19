@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/service-charge.php';
 
 function receipt_template_defaults(): array {
     return [
@@ -134,7 +135,7 @@ function receipt_note_lines(string $text): array {
     return preg_split('/\R/u', $text) ?: [];
 }
 
-function configurable_receipt_header(string $type, array $table, int $receiptNumber): array {
+function configurable_receipt_header(string $type, array $table, int $receiptNumber, ?string $issuedAt = null): array {
     $t = receipt_template($type);
     $lines = [];
     if ((int)$t['show_restaurant_name'] === 1) $lines[] = cfg('restaurant_name', 'ცხრამეტი ნაოჭი');
@@ -145,7 +146,10 @@ function configurable_receipt_header(string $type, array $table, int $receiptNum
     foreach (receipt_note_lines($t['top_note']) as $line) $lines[] = $line;
     if ((int)$t['show_table'] === 1) $lines[] = 'მაგიდა: ' . $table['name'];
     if ((int)$t['show_receipt_number'] === 1 && $receiptNumber > 0) $lines[] = 'ქვითრის ნომერი: #' . $receiptNumber;
-    if ((int)$t['show_datetime'] === 1) $lines[] = 'დრო: ' . date('Y-m-d H:i');
+    if ((int)$t['show_datetime'] === 1) {
+        $timestamp = $issuedAt !== null ? strtotime($issuedAt) : false;
+        $lines[] = 'დრო: ' . date('Y-m-d H:i', $timestamp !== false ? $timestamp : time());
+    }
     $lines[] = str_repeat('-', (int)$t['line_width']);
     return $lines;
 }
@@ -190,7 +194,8 @@ function build_configurable_kitchen_receipt(array $table, array $items, int $rec
 
 function build_configurable_final_receipt(array $table, array $order, array $items, int $receiptNumber): string {
     $t = receipt_template('final');
-    $lines = configurable_receipt_header('final', $table, $receiptNumber);
+    // A reprint retains the original closing time; bar/kitchen sends stay current.
+    $lines = configurable_receipt_header('final', $table, $receiptNumber, $order['closed_at'] ?? null);
     $subtotal = 0.0;
     foreach ($items as $item) {
         if ((int)$item['is_cancelled'] === 1) continue;
@@ -201,15 +206,21 @@ function build_configurable_final_receipt(array $table, array $order, array $ite
         if ((int)$t['show_comments'] === 1 && !empty($item['comment'])) $lines[] = 'კომენტარი: ' . $item['comment'];
     }
     $lines[] = str_repeat('-', (int)$t['line_width']);
-    if ((int)$t['show_totals'] === 1) {
+    $serviceAmount = pos_service_amount($order);
+    // A mandatory surcharge must remain visible even when a custom template
+    // hides totals. Zero-fee and historical receipts keep that preference.
+    if ((int)$t['show_totals'] === 1 || $serviceAmount > 0) {
         $storedSubtotal = (float)($order['subtotal_total'] ?? 0);
         if ($storedSubtotal > 0) $subtotal = $storedSubtotal;
         $discount = (float)($order['discount_amount'] ?? 0);
+        $lines[] = 'ქვეჯამი: ' . number_format($subtotal, 2) . ' GEL';
         if ($discount > 0) {
-            $lines[] = 'ქვეჯამი: ' . number_format($subtotal, 2) . ' GEL';
             $lines[] = 'ფასდაკლება: -' . number_format($discount, 2) . ' GEL';
         }
-        $lines[] = 'ჯამი: ' . number_format((float)$order['total'], 2) . ' GEL';
+        if ($serviceAmount > 0) {
+            $lines[] = 'მომსახურება (10%): ' . number_format($serviceAmount, 2) . ' GEL';
+        }
+        $lines[] = 'საბოლოო ჯამი: ' . number_format((float)$order['total'], 2) . ' GEL';
     }
     if ((int)$t['show_payment'] === 1) {
         $lines[] = 'გადახდა: ' . payment_label($order['payment_type'] ?? null);

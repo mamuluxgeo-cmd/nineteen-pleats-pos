@@ -35,6 +35,7 @@ function injectGarbaliaWorkflowStyles() {
     .garbalia-cash-modal[hidden],.garbalia-close-modal[hidden]{display:none!important}.garbalia-cash-modal,.garbalia-close-modal{position:fixed;inset:0;z-index:10020;display:grid;place-items:center;padding:20px;background:rgba(43,27,16,.46);backdrop-filter:blur(7px);animation:garbaliaFadeIn .16s ease-out}.garbalia-cash-dialog,.garbalia-close-dialog{position:relative;width:min(520px,100%);max-height:min(88vh,760px);overflow:auto;border:1px solid #ead6bd;border-radius:28px;background:linear-gradient(180deg,#fffaf2 0%,#f8ecdd 100%);box-shadow:0 28px 70px rgba(43,27,16,.30);padding:28px;color:#2b1b10;text-align:center;animation:garbaliaPopIn .18s ease-out}.garbalia-cash-history-dialog{width:min(760px,100%);text-align:left;overflow-y:auto!important;overflow-x:hidden!important}.garbalia-cash-bg-logo,.garbalia-close-bg-logo{position:absolute;right:-18px;top:-16px;width:136px;height:88px;object-fit:contain;opacity:.07;filter:brightness(0);pointer-events:none}.garbalia-cash-mini,.garbalia-close-mini{width:48px;height:34px;object-fit:contain;margin:0 auto 10px;display:block;mix-blend-mode:multiply}.garbalia-cash-dialog h2,.garbalia-cash-dialog h3,.garbalia-close-dialog h3{margin:0 0 8px;font-size:1.35rem;font-weight:950;letter-spacing:-.02em}.garbalia-cash-dialog p,.garbalia-close-dialog p{margin:0 auto 18px;max-width:390px;color:#6d5140;font-weight:800;line-height:1.45}.garbalia-cash-close,.garbalia-close-x{position:absolute;right:12px;top:12px;width:34px;height:34px;border:0;border-radius:50%;background:rgba(43,27,16,.08);color:#2b1b10;font-size:20px;font-weight:900;cursor:pointer}
     .garbalia-cash-popup-form{display:grid!important;gap:13px!important;text-align:left}.garbalia-cash-popup-form label{margin:0!important}.garbalia-cash-popup-form input,.garbalia-cash-popup-form select{min-height:48px!important;border-radius:14px!important}.garbalia-cash-popup-form .btn{min-height:48px!important;border-radius:14px!important;width:100%!important}.garbalia-cash-history-dialog .table-wrap{margin-top:12px;max-height:52vh;overflow-y:auto!important;overflow-x:hidden!important;width:100%!important}.garbalia-cash-history-dialog table{width:100%!important;min-width:0!important;table-layout:fixed!important}.garbalia-cash-history-dialog th,.garbalia-cash-history-dialog td{white-space:normal!important;word-break:break-word!important;overflow-wrap:anywhere!important}
     .garbalia-close-summary{display:grid;gap:8px;margin:12px 0 16px}.garbalia-close-summary div{display:flex;justify-content:space-between;gap:12px;padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.62);border:1px solid rgba(43,27,16,.09);text-align:left}.garbalia-close-summary span{color:#7a6657;font-weight:850}.garbalia-close-summary strong{font-weight:950;color:#2b1b10;text-align:right}.garbalia-close-list{max-height:160px;overflow:auto;text-align:left;border:1px solid rgba(43,27,16,.09);border-radius:16px;background:rgba(255,255,255,.48);padding:8px;margin-bottom:14px}.garbalia-close-list div{display:flex;justify-content:space-between;gap:10px;padding:8px 6px;border-bottom:1px solid rgba(43,27,16,.08);font-weight:850}.garbalia-close-list div:last-child{border-bottom:0}.garbalia-discount-box{margin:10px 0 14px;padding:12px;border-radius:18px;background:rgba(241,226,206,.58);text-align:left}.garbalia-discount-toggle{display:flex;align-items:center;gap:9px;font-weight:950;cursor:pointer}.garbalia-discount-controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}.garbalia-discount-controls[hidden]{display:none!important}.garbalia-discount-controls input,.garbalia-discount-controls select{min-height:44px!important;border-radius:13px!important}.garbalia-close-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.garbalia-close-actions .btn{width:100%;min-height:46px;border-radius:14px}.garbalia-close-actions .btn.light{background:#f1e2ce!important;color:#2b1b10!important}.history-filters .history-grid{grid-template-columns:repeat(4,minmax(150px,1fr))!important}.history-clean-actions{display:flex!important;align-items:center!important;gap:6px!important;flex-wrap:nowrap!important;margin-top:12px!important;overflow:visible!important}.history-clean-actions .btn{white-space:nowrap!important;font-size:.86rem!important;padding:9px 12px!important;min-height:40px!important;border-radius:12px!important}.history-detail.only-detail{max-width:980px;margin:0 auto 22px!important}.history-detail.only-detail .page-head{margin-bottom:14px!important}.history-detail.only-detail h3{margin-top:20px!important}.history-detail.only-detail .table-wrap{margin-top:10px!important}
+    .garbalia-close-summary div[hidden]{display:none!important}
     @media(max-width:1050px){.history-clean-actions{flex-wrap:wrap!important}.history-clean-actions .btn{font-size:.85rem!important}}
     @media(max-width:820px){.current-order-card .order-item{padding:12px 50px 12px 12px!important}.current-order-card .order-item.sent-item{padding-right:12px!important}.garbalia-cash-actions-panel{align-items:stretch!important;flex-direction:column!important}.garbalia-cash-panel-actions{display:grid;grid-template-columns:1fr;width:100%}.garbalia-cash-panel-actions .btn{width:100%!important}.history-filters .history-grid{grid-template-columns:1fr 1fr!important}.history-clean-actions{flex-wrap:wrap!important}}
     @media(max-width:560px){.history-filters .history-grid{grid-template-columns:1fr!important}.history-clean-actions .btn{width:100%!important}.garbalia-close-actions,.garbalia-discount-controls{grid-template-columns:1fr}.order-qty-edit{grid-template-columns:auto 56px 32px!important}.order-qty-edit input{width:56px!important}}
@@ -43,14 +44,54 @@ function injectGarbaliaWorkflowStyles() {
 }
 
 function parseMoney(text) {
-  const cleaned = String(text || '').replace(',', '.').replace(/[^0-9.\-]/g, '');
-  const n = parseFloat(cleaned);
+  let cleaned = String(text == null ? '' : text).replace(/[^0-9,.\-]/g, '');
+  if (cleaned.includes(',') && cleaned.includes('.')) {
+    cleaned = cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')
+      ? cleaned.replace(/\./g, '').replace(',', '.')
+      : cleaned.replace(/,/g, '');
+  } else if (cleaned.includes(',')) {
+    cleaned = /^-?\d{1,3}(,\d{3})+$/.test(cleaned) ? cleaned.replace(/,/g, '') : cleaned.replace(',', '.');
+  }
+  const n = Number(cleaned);
   return Number.isFinite(n) ? n : 0;
 }
 
 function formatMoney(n) {
-  return (Math.max(0, Number(n) || 0)).toFixed(2) + ' ₾';
+  return (Number(n) || 0).toFixed(2) + ' ₾';
 }
+
+function moneyToCents(value) {
+  const number = parseMoney(value);
+  const parts = Math.abs(number).toFixed(6).split('.');
+  const fraction = parts[1] || '000000';
+  const cents = Number(parts[0]) * 100 + Number(fraction.slice(0, 2)) + (Number(fraction[2]) >= 5 ? 1 : 0);
+  return number < 0 ? -cents : cents;
+}
+
+// Integer cents mirror the server: round discount first, then 10% of the remainder.
+function calculateCloseTotals(subtotal, discountType, discountValue, serviceRate) {
+  const cents = Math.max(0, moneyToCents(subtotal));
+  const value = Math.max(0, moneyToCents(discountValue));
+  let discount = 0;
+  if (discountType === 'percent') discount = Math.floor((cents * Math.min(10000, value) + 5000) / 10000);
+  if (discountType === 'amount') discount = Math.min(cents, value);
+  const net = Math.max(0, cents - discount);
+  const service = Number(serviceRate) === 10 ? Math.round(net / 10) : 0;
+  return {subtotal: cents / 100, discount: discount / 100, service: service / 100, total: (net + service) / 100};
+}
+
+function closePricingContext(form) {
+  const box = document.querySelector('.total-box[data-subtotal]');
+  const head = document.querySelector('.page-head[data-service-rate]');
+  const subtotal = box ? Number(box.dataset.subtotal) : NaN;
+  const rateText = form && form.hasAttribute('data-service-rate') ? form.dataset.serviceRate : (head ? head.dataset.serviceRate : '');
+  if (!Number.isFinite(subtotal) || subtotal < 0 || !['0', '10'].includes(rateText)) {
+    throw new Error('საბოლოო თანხის დასათვლელად განაახლე გვერდი.');
+  }
+  return {subtotal: subtotal, serviceRate: Number(rateText)};
+}
+
+window.GarbaliaMoney = {parse: parseMoney, format: formatMoney, calculate: calculateCloseTotals, toCents: moneyToCents};
 
 function markOrderItemStates() {
   document.querySelectorAll('.order-item:not(.cancelled)').forEach(function (item) {
@@ -113,11 +154,15 @@ function enhanceMixedPaymentAutoFill() {
   const card = form.querySelector('input[name="card_amount"]');
   if (!type || !cash || !card) return;
   let lastEdited = 'cash';
-  function total() { return parseMoney(document.querySelector('.total-box') ? document.querySelector('.total-box').textContent : '0'); }
+  function total() {
+    const pricing = closePricingContext(form);
+    return calculateCloseTotals(pricing.subtotal, 'none', 0, pricing.serviceRate).total;
+  }
   function sync(changed) {
     if (type.value !== 'mixed') return;
     lastEdited = changed || lastEdited;
-    const t = total();
+    let t;
+    try { t = total(); } catch (error) { return; }
     if (lastEdited === 'cash') card.value = Math.max(0, t - parseMoney(cash.value)).toFixed(2);
     else cash.value = Math.max(0, t - parseMoney(card.value)).toFixed(2);
   }
@@ -129,6 +174,7 @@ function enhanceMixedPaymentAutoFill() {
   });
   cash.addEventListener('input', function () { sync('cash'); });
   card.addEventListener('input', function () { sync('card'); });
+  document.addEventListener('garbalia:order-updated', function () { sync(lastEdited); });
 }
 
 function enhanceDayCashMovementPanel() {
@@ -179,7 +225,10 @@ function closeCashModal(modal) { if (modal) modal.hidden = true; }
 
 document.addEventListener('keydown', function (event) {
   if (event.key !== 'Escape') return;
-  document.querySelectorAll('.garbalia-cash-modal:not([hidden]),.garbalia-close-modal:not([hidden])').forEach(function (modal) { modal.hidden = true; });
+  document.querySelectorAll('.garbalia-cash-modal:not([hidden]),.garbalia-close-modal:not([hidden])').forEach(function (modal) {
+    if (modal.garbaliaDismiss) modal.garbaliaDismiss();
+    else modal.hidden = true;
+  });
 });
 
 function isHistoryPage() {
@@ -253,7 +302,13 @@ function setHidden(form, name, value) {
 }
 
 function showDiscountCloseModal(form) {
-  const subtotal = parseMoney(document.querySelector('.total-box') ? document.querySelector('.total-box').textContent : '0');
+  let pricing;
+  try { pricing = closePricingContext(form); } catch (error) { alert(error.message); return; }
+  const subtotal = pricing.subtotal;
+  document.querySelectorAll('.garbalia-close-modal').forEach(function (oldModal) {
+    if (oldModal.garbaliaDismiss) oldModal.garbaliaDismiss();
+    else oldModal.remove();
+  });
   const paymentSelect = form.querySelector('select[name="payment_type"]');
   const paymentText = paymentSelect ? paymentSelect.options[paymentSelect.selectedIndex].text.trim() : '—';
   const paymentType = paymentSelect ? paymentSelect.value : 'cash';
@@ -264,11 +319,22 @@ function showDiscountCloseModal(form) {
 
   const modal = document.createElement('div');
   modal.className = 'garbalia-close-modal';
-  modal.innerHTML = '<div class="garbalia-close-dialog" role="dialog" aria-modal="true"><button type="button" class="garbalia-close-x" data-close-modal>×</button><img class="garbalia-close-bg-logo" src="/Logo.png?v=12" alt=""><img class="garbalia-close-mini" src="/Logo.png?v=12" alt="GARBALIA"><h3>მაგიდის დახურვა</h3><p>გადაამოწმე შეკვეთის სია, გადახდა და ფასდაკლება. დადასტურების შემდეგ მაგიდა დაიხურება.</p><div class="garbalia-close-summary"><div><span>მაგიდა</span><strong>' + tableTitle + '</strong></div><div><span>გადახდა</span><strong>' + paymentText + '</strong></div><div><span>ქვეჯამი</span><strong data-subtotal>' + formatMoney(subtotal) + '</strong></div><div data-discount-line hidden><span>ფასდაკლება</span><strong data-discount-amount>-0.00 ₾</strong></div><div><span>საბოლოო ჯამი</span><strong data-final-total>' + formatMoney(subtotal) + '</strong></div></div><div class="garbalia-close-list"></div><div class="garbalia-discount-box"><label class="garbalia-discount-toggle"><input type="checkbox" data-discount-enabled> ფასდაკლება</label><div class="garbalia-discount-controls" hidden><select data-discount-type><option value="percent">პროცენტული %</option><option value="amount">თანხობრივი ₾</option></select><input type="number" min="0" step="0.01" data-discount-value placeholder="მაგ: 10"></div></div><div class="garbalia-close-actions"><button type="button" class="btn light" data-close-modal>გაუქმება</button><button type="button" class="btn success" data-confirm-close>დიახ, დახურვა</button></div></div>';
+  modal.innerHTML = '<div class="garbalia-close-dialog" role="dialog" aria-modal="true"><button type="button" class="garbalia-close-x" data-close-modal>×</button><img class="garbalia-close-bg-logo" src="/Logo.png?v=12" alt=""><img class="garbalia-close-mini" src="/Logo.png?v=12" alt="GARBALIA"><h3>მაგიდის დახურვა</h3><p>გადაამოწმე შეკვეთის სია, გადახდა და ფასდაკლება. დადასტურების შემდეგ მაგიდა დაიხურება.</p><div class="garbalia-close-summary"><div><span>მაგიდა</span><strong data-table-title></strong></div><div><span>გადახდა</span><strong data-payment-title></strong></div><div><span>ქვეჯამი</span><strong data-subtotal></strong></div><div data-discount-line hidden><span>ფასდაკლება</span><strong data-discount-amount>-0.00 ₾</strong></div><div data-service-line><span>მომსახურება 10%</span><strong data-service-amount></strong></div><div><span>საბოლოო ჯამი</span><strong data-final-total></strong></div><div data-cash-line hidden><span>ნაღდი</span><strong data-cash-total></strong></div><div data-card-line hidden><span>ბარათი</span><strong data-card-total></strong></div></div><div class="garbalia-close-list"></div><div class="garbalia-discount-box"><label class="garbalia-discount-toggle"><input type="checkbox" data-discount-enabled> ფასდაკლება</label><div class="garbalia-discount-controls" hidden><select data-discount-type><option value="percent">პროცენტული %</option><option value="amount">თანხობრივი ₾</option></select><input type="number" min="0" step="0.01" data-discount-value placeholder="მაგ: 10"></div></div><div class="garbalia-close-actions"><button type="button" class="btn light" data-close-modal>გაუქმება</button><button type="button" class="btn success" data-confirm-close>დიახ, დახურვა</button></div></div>';
+  modal.querySelector('[data-table-title]').textContent = tableTitle;
+  modal.querySelector('[data-payment-title]').textContent = paymentText;
+  modal.querySelector('[data-subtotal]').textContent = formatMoney(subtotal);
+  modal.querySelector('[data-service-line]').hidden = pricing.serviceRate === 0;
+  modal.querySelector('[data-cash-line]').hidden = paymentType !== 'mixed';
+  modal.querySelector('[data-card-line]').hidden = paymentType !== 'mixed';
   const list = modal.querySelector('.garbalia-close-list');
   items.slice(0, 10).forEach(function (item) {
     const div = document.createElement('div');
-    div.innerHTML = '<span>' + itemTitle(item, 'პროდუქტი') + '</span><strong>' + itemSum(item) + '</strong>';
+    const title = document.createElement('span');
+    const amount = document.createElement('strong');
+    title.textContent = itemTitle(item, 'პროდუქტი');
+    amount.textContent = itemSum(item);
+    div.appendChild(title);
+    div.appendChild(amount);
     list.appendChild(div);
   });
   if (items.length > 10) {
@@ -285,41 +351,59 @@ function showDiscountCloseModal(form) {
   const discountLine = modal.querySelector('[data-discount-line]');
   const discountAmountEl = modal.querySelector('[data-discount-amount]');
   const finalEl = modal.querySelector('[data-final-total]');
+  const serviceEl = modal.querySelector('[data-service-amount]');
   let finalTotal = subtotal;
   let discountAmount = 0;
   let lastSplit = 'cash';
 
   function recalc() {
-    discountAmount = 0;
-    if (enabled.checked) {
-      const v = Math.max(0, parseFloat(value.value || '0') || 0);
-      if (type.value === 'percent') discountAmount = subtotal * Math.min(100, v) / 100;
-      else discountAmount = Math.min(subtotal, v);
-    }
-    discountAmount = Math.round(discountAmount * 100) / 100;
-    finalTotal = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
+    if (!modal.isConnected || modal.hidden) return;
+    const totals = calculateCloseTotals(subtotal, enabled.checked ? type.value : 'none', value.value, pricing.serviceRate);
+    discountAmount = totals.discount;
+    finalTotal = totals.total;
     discountLine.hidden = discountAmount <= 0;
     discountAmountEl.textContent = '-' + formatMoney(discountAmount);
     finalEl.textContent = formatMoney(finalTotal);
+    serviceEl.textContent = formatMoney(totals.service);
     if (paymentType === 'mixed') syncSplit(lastSplit);
   }
 
   function syncSplit(changed) {
     lastSplit = changed || lastSplit;
     if (!cashInput || !cardInput) return;
-    if (lastSplit === 'cash') cardInput.value = Math.max(0, finalTotal - parseMoney(cashInput.value)).toFixed(2);
-    else cashInput.value = Math.max(0, finalTotal - parseMoney(cardInput.value)).toFixed(2);
+    const finalCents = moneyToCents(finalTotal);
+    const edited = lastSplit === 'cash' ? cashInput : cardInput;
+    const remainder = lastSplit === 'cash' ? cardInput : cashInput;
+    const paidCents = Math.max(0, Math.min(finalCents, moneyToCents(edited.value)));
+    edited.value = (paidCents / 100).toFixed(2);
+    remainder.value = ((finalCents - paidCents) / 100).toFixed(2);
+    modal.querySelector('[data-cash-total]').textContent = formatMoney(parseMoney(cashInput.value));
+    modal.querySelector('[data-card-total]').textContent = formatMoney(parseMoney(cardInput.value));
   }
 
   enabled.addEventListener('change', function () { controls.hidden = !enabled.checked; recalc(); if (enabled.checked) setTimeout(function () { value.focus(); }, 60); });
   type.addEventListener('change', recalc);
   value.addEventListener('input', recalc);
-  if (cashInput) cashInput.addEventListener('input', function () { lastSplit = 'cash'; recalc(); });
-  if (cardInput) cardInput.addEventListener('input', function () { lastSplit = 'card'; recalc(); });
+  const onCash = function () { lastSplit = 'cash'; recalc(); };
+  const onCard = function () { lastSplit = 'card'; recalc(); };
+  if (cashInput) cashInput.addEventListener('input', onCash);
+  if (cardInput) cardInput.addEventListener('input', onCard);
+  function dismiss() {
+    if (form.dataset.directClosePrinting === '1') return;
+    if (cashInput) cashInput.removeEventListener('input', onCash);
+    if (cardInput) cardInput.removeEventListener('input', onCard);
+    closeModal(modal);
+    modal.remove();
+  }
+  modal.garbaliaDismiss = dismiss;
 
-  modal.querySelectorAll('[data-close-modal]').forEach(function (btn) { btn.addEventListener('click', function () { closeModal(modal); modal.remove(); }); });
-  modal.addEventListener('click', function (event) { if (event.target === modal) { closeModal(modal); modal.remove(); } });
+  modal.querySelectorAll('[data-close-modal]').forEach(function (btn) { btn.addEventListener('click', dismiss); });
+  modal.addEventListener('click', function (event) { if (event.target === modal) dismiss(); });
   modal.querySelector('[data-confirm-close]').addEventListener('click', function () {
+    if (form.dataset.directClosePrinting === '1') return;
+    // Only the new preview can opt in; stale cached clients must refresh before charging.
+    setHidden(form, 'service_charge_version', '1');
+    setHidden(form, 'expected_subtotal', subtotal.toFixed(2));
     setHidden(form, 'discount_enabled', enabled.checked ? '1' : '0');
     setHidden(form, 'discount_type', enabled.checked ? type.value : 'none');
     setHidden(form, 'discount_value', enabled.checked ? (value.value || '0') : '0');

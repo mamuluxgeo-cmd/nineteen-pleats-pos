@@ -2,19 +2,138 @@ name: Deploy POS to hosting
 
 on:
   push:
-    branches:
-      - main
     paths:
       - 'public_html/**'
+      - 'database/**'
+      - 'tests/**'
+      - '.github/workflows/deploy.yml'
+  pull_request:
+    paths:
+      - 'public_html/**'
+      - 'database/**'
+      - 'tests/**'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+# Keep uploads in order; never cancel an upload halfway through.
+concurrency:
+  group: pos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  test:
+    name: PHP ${{ matrix.php }} / isolated service charge regressions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.4', '8.3']
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_DATABASE: pos_test
+          MARIADB_USER: pos_test
+          MARIADB_PASSWORD: pos-test-only
+          MARIADB_ROOT_PASSWORD: pos-test-root-only
+        ports:
+          - 3306/tcp
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up production-compatible PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_mysql, mbstring
+          coverage: none
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: PHP syntax, pricing and receipt regressions
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            php -l "$file"
+          done < <(find public_html tests -type f -name '*.php' -print0)
+          php tests/pricing.php
+          php tests/receipts.php
+
+      - name: JavaScript syntax and money regressions
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            node --check "$file"
+          done < <(find public_html tests -type f -name '*.js' -print0)
+          node tests/money.js
+
+      - name: Both close routes on the existing database schema
+        env:
+          POS_TEST_MODE: '1'
+          POS_TEST_DB_HOST: 127.0.0.1
+          POS_TEST_DB_PORT: ${{ job.services.mariadb.ports['3306'] }}
+          POS_TEST_DB_NAME: pos_test
+          POS_TEST_DB_USER: pos_test
+          POS_TEST_DB_PASSWORD: pos-test-only
+        run: php tests/integration.php
+
   deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Stage the new dependency before callers are uploaded
+        run: |
+          mkdir -p "$RUNNER_TEMP/pos-prerequisites/includes"
+          cp public_html/includes/service-charge.php "$RUNNER_TEMP/pos-prerequisites/includes/service-charge.php"
+
+      # A separate state file tracks ONLY this prerequisite. It does not reuse
+      # the full site's sync state or delete files belonging to the main upload.
+      - name: Upload service-charge helper first
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ${{ runner.temp }}/pos-prerequisites/
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}
+          state-name: .pos-prerequisite-sync-state.json
+
+      - name: Stage pricing backends before checkout screens
+        run: |
+          mkdir -p "$RUNNER_TEMP/pos-pricing-core/includes"
+          cp public_html/includes/bootstrap.php "$RUNNER_TEMP/pos-pricing-core/includes/bootstrap.php"
+          cp public_html/includes/actions.php "$RUNNER_TEMP/pos-pricing-core/includes/actions.php"
+          cp public_html/includes/receipt-templates.php "$RUNNER_TEMP/pos-pricing-core/includes/receipt-templates.php"
+          cp public_html/close_order_print.php "$RUNNER_TEMP/pos-pricing-core/close_order_print.php"
+
+      # This ordered FTP deployment is not atomic. During the short transition,
+      # old checkout screens are asked to refresh instead of confirming old totals.
+      - name: Upload pricing backends before checkout screens
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ${{ runner.temp }}/pos-pricing-core/
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}
+          state-name: .pos-pricing-core-sync-state.json
 
       - name: Create config.php from secrets
         run: |

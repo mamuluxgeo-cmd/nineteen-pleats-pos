@@ -1,0 +1,21 @@
+[
+  {"name":"dine in", "subtotal":100, "takeaway":false, "discount_type":"none", "discount_value":0, "discount":0, "service":10, "total":110},
+  {"name":"takeaway", "subtotal":100, "takeaway":true, "discount_type":"none", "discount_value":0, "discount":0, "service":0, "total":100},
+  {"name":"fixed discount before fee", "subtotal":100, "takeaway":false, "discount_type":"amount", "discount_value":20, "discount":20, "service":8, "total":88},
+  {"name":"percent discount before fee", "subtotal":100, "takeaway":false, "discount_type":"percent", "discount_value":20, "discount":20, "service":8, "total":88},
+  {"name":"discounted takeaway", "subtotal":100, "takeaway":true, "discount_type":"amount", "discount_value":20, "discount":20, "service":0, "total":80},
+  {"name":"full percent discount", "subtotal":100, "takeaway":false, "discount_type":"percent", "discount_value":100, "discount":100, "service":0, "total":0},
+  {"name":"full fixed discount", "subtotal":100, "takeaway":false, "discount_type":"amount", "discount_value":100, "discount":100, "service":0, "total":0},
+  {"name":"capped percent discount", "subtotal":100, "takeaway":false, "discount_type":"percent", "discount_value":150, "discount":100, "service":0, "total":0},
+  {"name":"capped fixed discount", "subtotal":100, "takeaway":false, "discount_type":"amount", "discount_value":200, "discount":100, "service":0, "total":0},
+  {"name":"half tetri fee rounds up", "subtotal":0.05, "takeaway":false, "discount_type":"none", "discount_value":0, "discount":0, "service":0.01, "total":0.06},
+  {"name":"one and half tetri fee", "subtotal":0.15, "takeaway":false, "discount_type":"none", "discount_value":0, "discount":0, "service":0.02, "total":0.17},
+  {"name":"small takeaway", "subtotal":0.05, "takeaway":true, "discount_type":"none", "discount_value":0, "discount":0, "service":0, "total":0.05},
+  {"name":"round discount then fee", "subtotal":10.05, "takeaway":false, "discount_type":"percent", "discount_value":15, "discount":1.51, "service":0.85, "total":9.39},
+  {"name":"fractional percent", "subtotal":10.01, "takeaway":false, "discount_type":"percent", "discount_value":33.33, "discount":3.34, "service":0.67, "total":7.34},
+  {"name":"percent input rounded to basis points", "subtotal":1000, "takeaway":false, "discount_type":"percent", "discount_value":33.335, "discount":333.40, "service":66.66, "total":733.26},
+  {"name":"binary-sensitive percent input", "subtotal":1000, "takeaway":false, "discount_type":"percent", "discount_value":10.075, "discount":100.80, "service":89.92, "total":989.12},
+  {"name":"large subtotal", "subtotal":1234.50, "takeaway":false, "discount_type":"none", "discount_value":0, "discount":0, "service":123.45, "total":1357.95},
+  {"name":"large takeaway", "subtotal":10000, "takeaway":true, "discount_type":"percent", "discount_value":10, "discount":1000, "service":0, "total":9000},
+  {"name":"zero subtotal", "subtotal":0, "takeaway":false, "discount_type":"none", "discount_value":0, "discount":0, "service":0, "total":0}
+]

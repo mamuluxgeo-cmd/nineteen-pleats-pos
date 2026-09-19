@@ -31,6 +31,8 @@ function page_day(): void {
     $expectedCash = (float)$day['opening_cash'] + (float)$summary['cash_total'] + $cashNet;
     echo '<div class="page-head"><div><h1>დღე გახსნილია</h1><p class="muted">გახსნა: '.h($day['opened_at']).'</p></div><a class="btn primary" href="'.h(url_for('tables')).'">მაგიდებზე გადასვლა</a></div>';
     echo '<section class="stats"><div><span>გაყიდვები</span><strong>'.money($summary['sales_total']).'</strong></div><div><span>ნაღდი ნავაჭრი</span><strong>'.money($summary['cash_total']).'</strong></div><div><span>ბარათი</span><strong>'.money($summary['card_total']).'</strong></div><div><span>სალაროს მოძრაობა</span><strong>'.money($cashNet).'</strong></div><div><span>მოსალოდნელი ნაღდი</span><strong>'.money($expectedCash).'</strong></div><div><span>ღია მაგიდები</span><strong>'.$openOrders.'</strong></div></section>';
+    $serviceTotal = (float)($summary['service_total'] ?? 0);
+    echo '<section class="stats"><div><span>პროდუქტები — ფასდაკლების შემდეგ</span><strong>'.money((float)$summary['sales_total'] - $serviceTotal).'</strong></div><div><span>მომსახურება</span><strong>'.money($serviceTotal).'</strong></div></section>';
     echo '<section class="two-col reports day-cash-layout"><div class="card"><h2>სალაროს მოძრაობა</h2><p class="muted">ჩაწერე თანხის დამატება, ამოღება ან ყოველდღიური ხარჯი — დღის დახურვისას ეს ავტომატურად გაითვალისწინება.</p><form class="stack" method="post"><input type="hidden" name="action" value="cash_movement"><label>ტიპი<select name="movement_type"><option value="add">თანხის დამატება სალაროში</option><option value="remove">თანხის ამოღება სალაროდან</option><option value="expense">ხარჯის ჩაწერა</option></select></label><label>თანხა<input type="number" step="0.01" min="0" name="amount" required></label><label>კომენტარი<input name="note" placeholder="მაგ: პროდუქტის შეძენა, კურიერი..."></label><button class="btn success">ჩაწერა</button></form></div><div class="card"><h2>დღევანდელი ჩანაწერები</h2>';
     if (!$movements) {
         echo '<p class="muted">სალაროს მოძრაობა ჯერ არ არის ჩაწერილი.</p>';
@@ -94,6 +96,8 @@ function page_table(): void {
     $table = fetch_table($tableId);
     if (!$table) redirect_to('tables');
     $order = current_open_order((int)$day['id'], $tableId);
+    $expectedOrderId = (int)($order['id'] ?? 0);
+    $serviceRate = pos_is_takeaway($table) ? 0 : 10;
     $items = $order ? order_items((int)$order['id']) : [];
     $total = $order ? order_total((int)$order['id']) : 0;
     $unsentCount = $order ? unsent_items_count((int)$order['id']) : 0;
@@ -103,7 +107,7 @@ function page_table(): void {
     if ($order && (int)($order['receipt_number'] ?? 0) > 0) {
         $receiptBadge = '<div class="pill" data-open-receipt-number="1" style="background:#2b1b10;color:#fff;font-weight:950">ქვითარი #'.(int)$order['receipt_number'].'</div>';
     }
-    echo '<div class="page-head"><h1>'.h($table['name']).'</h1>'.$receiptBadge.'<div class="total-box">'.money($total).'</div></div><section class="pos-grid"><div class="card"><h2>პროდუქტის დამატება</h2>';
+    echo '<div class="page-head" data-order-id="'.$expectedOrderId.'" data-service-rate="'.$serviceRate.'"><h1>'.h($table['name']).'</h1>'.$receiptBadge.'<div class="total-box" data-subtotal="'.h(number_format($total,2,'.','')).'">'.money($total).'</div></div><section class="pos-grid"><div class="card"><h2>პროდუქტის დამატება</h2>';
     if (!$products) echo '<p class="muted">პროდუქტები ჯერ არ არის დამატებული.</p>';
     $cat = null;
     foreach ($products as $product) {
@@ -129,9 +133,10 @@ function page_table(): void {
     }
     echo '<div class="actions"><form class="send-order-form" method="post"><input type="hidden" name="action" value="send_order"><input type="hidden" name="table_id" value="'.$tableId.'"><button class="btn primary" '.($unsentCount<=0?'disabled':'').'>შეკვეთის გაგზავნა / ბეჭდვა</button></form></div>';
     if ($order) {
-        echo '<hr><h2>მაგიდის დახურვა</h2><form class="close-form" method="post"><input type="hidden" name="action" value="close_order"><input type="hidden" name="table_id" value="'.$tableId.'"><label>გადახდის ტიპი<select id="payment_type" name="payment_type"><option value="cash">ნაღდი</option><option value="card">ბარათი</option><option value="mixed">შერეული</option></select></label><div id="mixed_fields" class="mixed-fields"><label>ნაღდი<input name="cash_amount" type="number" step="0.01" min="0"></label><label>ბარათი<input name="card_amount" type="number" step="0.01" min="0"></label></div><button class="btn success">საბოლოო ანგარიში</button></form>';
+        echo '<hr><h2>მაგიდის დახურვა</h2><form class="close-form" method="post"><input type="hidden" name="action" value="close_order"><input type="hidden" name="table_id" value="'.$tableId.'"><input type="hidden" name="expected_order_id" value="'.$expectedOrderId.'"><label>გადახდის ტიპი<select id="payment_type" name="payment_type"><option value="cash">ნაღდი</option><option value="card">ბარათი</option><option value="mixed">შერეული</option></select></label><div id="mixed_fields" class="mixed-fields"><label>ნაღდი<input name="cash_amount" type="number" step="0.01" min="0"></label><label>ბარათი<input name="card_amount" type="number" step="0.01" min="0"></label></div><button class="btn success">საბოლოო ანგარიში</button></form>';
     }
     echo '</div></section>';
+    echo '<script defer src="/assets/table-fast-actions.js?v=3"></script>';
     render_footer();
 }
 
@@ -219,17 +224,18 @@ function page_history(): void {
         header('Content-Disposition: attachment; filename="garbalia-history-' . $from . '-' . $to . '.csv"');
         echo "\xEF\xBB\xBF";
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['ქვითარი','დღე','მაგიდა','მომხმარებელი','ჯამი','ნაღდი','ბარათი','გადახდა','სტატუსი','დრო']);
+        fputcsv($out, ['ქვითარი','დღე','მაგიდა','მომხმარებელი','პროდუქტები ფასდაკლების შემდეგ','მომსახურება','საბოლოო ჯამი','ნაღდი','ბარათი','გადახდა','სტატუსი','დრო']);
         foreach ($orders as $o) {
             $receiptNumber = (int)($o['receipt_number'] ?? 0) ?: (int)$o['id'];
-            fputcsv($out, ['#'.$receiptNumber, '#'.(int)$o['day_id'], $o['table_name'], $o['user_name'] ?: '—', number_format((float)$o['total'],2,'.',''), number_format((float)$o['cash_amount'],2,'.',''), number_format((float)$o['card_amount'],2,'.',''), $o['status']==='cancelled'?'—':payment_label($o['payment_type']), $o['status']==='cancelled'?'ნულით დახურული':'დახურული', $o['closed_at'] ?: $o['created_at']]);
+            fputcsv($out, ['#'.$receiptNumber, '#'.(int)$o['day_id'], $o['table_name'], $o['user_name'] ?: '—', number_format((float)$o['total'] - pos_service_amount($o),2,'.',''), number_format(pos_service_amount($o),2,'.',''), number_format((float)$o['total'],2,'.',''), number_format((float)$o['cash_amount'],2,'.',''), number_format((float)$o['card_amount'],2,'.',''), $o['status']==='cancelled'?'—':payment_label($o['payment_type']), $o['status']==='cancelled'?'ნულით დახურული':'დახურული', $o['closed_at'] ?: $o['created_at']]);
         }
         fclose($out);
         exit;
     }
+    $serviceTotal = 0.0;
     $salesTotal = 0; $cashTotal = 0; $cardTotal = 0; $closedCount = 0; $zeroCount = 0;
     foreach ($orders as $o) {
-        if ($o['status'] === 'closed') { $closedCount++; $salesTotal += (float)$o['total']; $cashTotal += (float)$o['cash_amount']; $cardTotal += (float)$o['card_amount']; }
+        if ($o['status'] === 'closed') { $serviceTotal += pos_service_amount($o); $closedCount++; $salesTotal += (float)$o['total']; $cashTotal += (float)$o['cash_amount']; $cardTotal += (float)$o['card_amount']; }
         elseif ($o['status'] === 'cancelled') { $zeroCount++; }
     }
     render_header('ისტორია');
@@ -241,6 +247,7 @@ function page_history(): void {
     foreach ($users as $u) echo '<option value="'.(int)$u['id'].'" '.$sel($userId, $u['id']).'>'.h($u['name']).'</option>';
     echo '</select></label><label>პროდუქტის ძებნა<input name="product" value="'.h($productSearch).'" placeholder="მაგ: ხინკალი"></label><label>გადახდა<select name="payment"><option value="all" '.$sel($payment,'all').'>ყველა</option><option value="cash" '.$sel($payment,'cash').'>ნაღდი</option><option value="card" '.$sel($payment,'card').'>ბარათი</option><option value="mixed" '.$sel($payment,'mixed').'>შერეული</option><option value="zero" '.$sel($payment,'zero').'>ნულით დახურული</option></select></label><label>სტატუსი<select name="status"><option value="all" '.$sel($status,'all').'>ყველა</option><option value="closed" '.$sel($status,'closed').'>დახურული</option><option value="cancelled" '.$sel($status,'cancelled').'>ნულით დახურული</option></select></label><label>პროდუქტები<select name="item_filter"><option value="all" '.$sel($itemFilter,'all').'>ყველა</option><option value="cancelled_items" '.$sel($itemFilter,'cancelled_items').'>გაუქმებული პროდუქტებით</option></select></label><button class="btn primary">ძებნა</button></div></form><div class="history-actions"><a class="btn" href="'.h(url_for('history',['from'=>$today,'to'=>$today])).'">დღეს</a><a class="btn" href="'.h(url_for('history',['from'=>date('Y-m-d', strtotime('-1 day')),'to'=>date('Y-m-d', strtotime('-1 day'))])).'">გუშინ</a><a class="btn" href="'.h(url_for('history',['from'=>$monthStart,'to'=>$today])).'">ამ თვეში</a><a class="btn success" href="'.h(url_for('history', array_merge($_GET, ['export'=>'excel']))).'">Excel ჩამოტვირთვა</a></div></section>';
     echo '<section class="stats"><div><span>სულ გაყიდვა</span><strong>'.money($salesTotal).'</strong></div><div><span>ნაღდი</span><strong>'.money($cashTotal).'</strong></div><div><span>ბარათი</span><strong>'.money($cardTotal).'</strong></div><div><span>დახურული ანგარიშები</span><strong>'.$closedCount.'</strong></div><div><span>ნულით დახურული</span><strong>'.$zeroCount.'</strong></div></section>';
+    echo '<section class="stats"><div><span>პროდუქტები — ფასდაკლების შემდეგ</span><strong>'.money($salesTotal - $serviceTotal).'</strong></div><div><span>მომსახურება</span><strong>'.money($serviceTotal).'</strong></div></section>';
     if ($viewOrderId > 0) {
         $stmt = db()->prepare('SELECT o.*, t.name table_name, u.name user_name FROM orders o JOIN restaurant_tables t ON t.id=o.table_id LEFT JOIN users u ON u.id=o.user_id WHERE o.id=? AND o.status IN ("closed","cancelled")');
         $stmt->execute([$viewOrderId]);
@@ -248,7 +255,7 @@ function page_history(): void {
         if ($detail) {
             $items = order_items((int)$detail['id']);
             $receiptNumber = (int)($detail['receipt_number'] ?? 0) ?: (int)$detail['id'];
-            echo '<section class="card history-detail"><div class="page-head"><h2>ქვითარი #'.$receiptNumber.'</h2><a class="btn" href="'.h(url_for('history',['from'=>$from,'to'=>$to,'table_id'=>$tableId,'payment'=>$payment,'status'=>$status,'user_id'=>$userId,'product'=>$productSearch,'item_filter'=>$itemFilter])).'">დახურვა</a></div><div class="history-detail-grid"><div data-receipt-number-card="1"><span>ქვითრის ნომერი</span><strong>#'.$receiptNumber.'</strong></div><div><span>მაგიდა</span><strong>'.h($detail['table_name']).'</strong></div><div><span>სტატუსი</span><strong>'.h($detail['status']==='cancelled'?'ნულით დახურული':'დახურული').'</strong></div><div><span>მომხმარებელი</span><strong>'.h($detail['user_name'] ?: '—').'</strong></div><div><span>გადახდა</span><strong>'.h($detail['status']==='cancelled'?'—':payment_label($detail['payment_type'])).'</strong></div><div><span>ჯამი</span><strong>'.money($detail['total']).'</strong></div><div><span>დრო</span><strong>'.h($detail['closed_at'] ?: $detail['created_at']).'</strong></div></div><h3>პროდუქტები</h3><div class="table-wrap"><table><thead><tr><th>პროდუქტი</th><th>რაოდ.</th><th>ფასი</th><th>ჯამი</th><th>სტატუსი / მიზეზი</th></tr></thead><tbody>';
+            echo '<section class="card history-detail"><div class="page-head"><h2>ქვითარი #'.$receiptNumber.'</h2><a class="btn" href="'.h(url_for('history',['from'=>$from,'to'=>$to,'table_id'=>$tableId,'payment'=>$payment,'status'=>$status,'user_id'=>$userId,'product'=>$productSearch,'item_filter'=>$itemFilter])).'">დახურვა</a></div><div class="history-detail-grid"><div data-receipt-number-card="1"><span>ქვითრის ნომერი</span><strong>#'.$receiptNumber.'</strong></div><div><span>მაგიდა</span><strong>'.h($detail['table_name']).'</strong></div><div><span>სტატუსი</span><strong>'.h($detail['status']==='cancelled'?'ნულით დახურული':'დახურული').'</strong></div><div><span>მომხმარებელი</span><strong>'.h($detail['user_name'] ?: '—').'</strong></div><div><span>გადახდა</span><strong>'.h($detail['status']==='cancelled'?'—':payment_label($detail['payment_type'])).'</strong></div><div><span>პროდუქტები — ფასდაკლების შემდეგ</span><strong>'.money((float)$detail['total'] - pos_service_amount($detail)).'</strong></div><div><span>მომსახურება</span><strong>'.money(pos_service_amount($detail)).'</strong></div><div><span>საბოლოო ჯამი</span><strong>'.money($detail['total']).'</strong></div><div><span>დრო</span><strong>'.h($detail['closed_at'] ?: $detail['created_at']).'</strong></div></div><h3>პროდუქტები</h3><div class="table-wrap"><table><thead><tr><th>პროდუქტი</th><th>რაოდ.</th><th>ფასი</th><th>ჯამი</th><th>სტატუსი / მიზეზი</th></tr></thead><tbody>';
             foreach ($items as $it) {
                 $lineTotal = (float)$it['quantity'] * (float)$it['price'];
                 $itemStatus = (int)$it['is_cancelled'] === 1 ? 'გაუქმებულია: '.($it['cancel_reason'] ?: '—') : 'გაყიდულია';
@@ -275,18 +282,19 @@ try {
     handle_post_action();
     $page = $_GET['page'] ?? 'day';
     if ($page === 'logout') { session_destroy(); redirect_to('login'); }
-    match ($page) {
-        'login' => page_login(),
-        'day' => page_day(),
-        'tables' => page_tables(),
-        'table' => page_table(),
-        'products' => page_products(),
-        'history' => page_history(),
-        'print_order' => page_print_order(),
-        'print_final' => page_print_final(),
-        'reports' => redirect_to('history'),
-        default => redirect_to('day'),
-    };
+    // Keep the legacy router compatible with PHP 7.4.
+    switch ($page) {
+        case 'login': page_login(); break;
+        case 'day': page_day(); break;
+        case 'tables': page_tables(); break;
+        case 'table': page_table(); break;
+        case 'products': page_products(); break;
+        case 'history': page_history(); break;
+        case 'print_order': page_print_order(); break;
+        case 'print_final': page_print_final(); break;
+        case 'reports': redirect_to('history'); break;
+        default: redirect_to('day'); break;
+    }
 } catch (Throwable $e) {
     render_header('შეცდომა');
     echo '<section class="card narrow error"><h1>შეცდომა</h1><p>შეამოწმე config.php და MySQL ბაზის import.</p><pre>'.h($e->getMessage()).'</pre></section>';

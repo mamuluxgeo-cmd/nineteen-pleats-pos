@@ -104,7 +104,9 @@ render_header('ისტორია');
       <div><span>სტატუსი</span><strong><?= h($detail['status']==='cancelled'?'ნულით დახურული':'დახურული') ?></strong></div>
       <div><span>მოლარე</span><strong><?= h($detail['user_name'] ?: '—') ?></strong></div>
       <div><span>გადახდა</span><strong><?= h($detail['status']==='cancelled'?'—':payment_label($detail['payment_type'])) ?></strong></div>
-      <div><span>ჯამი</span><strong><?= money($detail['total']) ?></strong></div>
+      <div><span>პროდუქტები — ფასდაკლების შემდეგ</span><strong><?= money((float)$detail['total'] - pos_service_amount($detail)) ?></strong></div>
+      <div><span>მომსახურება</span><strong><?= money(pos_service_amount($detail)) ?></strong></div>
+      <div><span>საბოლოო ჯამი</span><strong><?= money($detail['total']) ?></strong></div>
       <div><span>დრო</span><strong><?= h($detail['closed_at'] ?: $detail['created_at']) ?></strong></div>
     </div>
     <h3>პროდუქტები</h3>

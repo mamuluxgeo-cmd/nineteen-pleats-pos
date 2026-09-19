@@ -179,8 +179,9 @@
     Object.defineProperty(proto, '__garbaliaClosePrintBridge', {value: true, configurable: false});
     proto.submit = function () {
       const action = this.querySelector && this.querySelector('input[name="action"]');
-      if (action && action.value === 'close_order' && this.dataset.garbaliaConfirmedClose === '1' && this.dataset.directClosePrinting !== '1') {
-        closeAndPrint(this);
+      if (action && action.value === 'close_order' && this.dataset.garbaliaConfirmedClose === '1') {
+        // A second confirmation while printing must not fall through to a native POST.
+        if (this.dataset.directClosePrinting !== '1') closeAndPrint(this);
         return;
       }
       return nativeSubmit.call(this);

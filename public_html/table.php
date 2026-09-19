@@ -46,7 +46,9 @@ try {
         $receiptBadge = '<div class="pill" data-open-receipt-number="1" style="background:#2b1b10;color:#fff;font-weight:950">ქვითარი #'.(int)$order['receipt_number'].'</div>';
     }
 
-    echo '<div class="page-head"><h1>'.h($table['name']).'</h1>'.$receiptBadge.'<div class="total-box">'.money($total).'</div></div>';
+    $orderId = (int)($order['id'] ?? 0);
+    $serviceRate = pos_is_takeaway($table) ? 0 : 10;
+    echo '<div class="page-head" data-order-id="'.$orderId.'" data-service-rate="'.$serviceRate.'"><h1>'.h($table['name']).'</h1>'.$receiptBadge.'<div class="total-box" data-subtotal="'.number_format($total, 2, '.', '').'">'.money($total).'</div></div>';
     echo '<section class="pos-grid"><div class="card"><h2>პროდუქტის დამატება</h2>';
 
     if (!$products) echo '<p class="muted">პროდუქტები ჯერ არ არის დამატებული.</p>';
@@ -100,16 +102,17 @@ try {
         . '</form></div>';
 
     if ($order) {
-        echo '<hr><h2>მაგიდის დახურვა</h2><form class="close-form" method="post">'
+        echo '<hr><h2>მაგიდის დახურვა</h2><form class="close-form" method="post" data-service-rate="'.$serviceRate.'">'
             . '<input type="hidden" name="action" value="close_order">'
             . '<input type="hidden" name="table_id" value="'.$tableId.'">'
+            . '<input type="hidden" name="expected_order_id" value="'.$orderId.'">'
             . '<label>გადახდის ტიპი<select id="payment_type" name="payment_type"><option value="cash">ნაღდი</option><option value="card">ბარათი</option><option value="mixed">შერეული</option></select></label>'
             . '<div id="mixed_fields" class="mixed-fields"><label>ნაღდი<input name="cash_amount" type="number" step="0.01" min="0"></label><label>ბარათი<input name="card_amount" type="number" step="0.01" min="0"></label></div>'
             . '<button class="btn success">საბოლოო ანგარიში</button></form>';
     }
 
     echo '</div></section>';
-    echo '<script defer src="/assets/table-fast-actions.js?v=2"></script>';
+    echo '<script defer src="/assets/table-fast-actions.js?v=3"></script>';
     render_footer();
 } catch (Throwable $e) {
     render_header('შეცდომა');

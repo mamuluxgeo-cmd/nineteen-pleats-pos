@@ -9,6 +9,7 @@ if (!file_exists($configFile)) {
 }
 $config = require $configFile;
 date_default_timezone_set($config['timezone'] ?? 'Asia/Tbilisi');
+require_once __DIR__ . '/service-charge.php';
 
 // GET requests only need to read the authenticated user. Release PHP's session
 // file lock immediately so a slow DB/page request cannot block another click,
@@ -231,15 +232,18 @@ function day_summary(int $dayId): array {
         'sales_total' => 0,
         'cash_total' => 0,
         'card_total' => 0,
+        'service_total' => 0,
         'cancelled_count' => 0,
     ];
-    $stmt = db()->prepare("SELECT COUNT(*) c, COALESCE(SUM(total),0) total, COALESCE(SUM(cash_amount),0) cash_total, COALESCE(SUM(card_amount),0) card_total FROM orders WHERE business_day_id=? AND status='closed'");
+    $serviceSql = pos_service_amount_sql();
+    $stmt = db()->prepare("SELECT COUNT(*) c, COALESCE(SUM(total),0) total, COALESCE(SUM(cash_amount),0) cash_total, COALESCE(SUM(card_amount),0) card_total, COALESCE(SUM({$serviceSql}),0) service_total FROM orders WHERE business_day_id=? AND status='closed'");
     $stmt->execute([$dayId]);
     $row = $stmt->fetch() ?: [];
     $summary['orders_count'] = (int)($row['c'] ?? 0);
     $summary['sales_total'] = (float)($row['total'] ?? 0);
     $summary['cash_total'] = (float)($row['cash_total'] ?? 0);
     $summary['card_total'] = (float)($row['card_total'] ?? 0);
+    $summary['service_total'] = (float)($row['service_total'] ?? 0);
     $stmt = db()->prepare('SELECT COUNT(*) FROM order_items oi JOIN orders o ON o.id=oi.order_id WHERE o.business_day_id=? AND oi.is_cancelled=1');
     $stmt->execute([$dayId]);
     $summary['cancelled_count'] = (int)$stmt->fetchColumn();
@@ -323,12 +327,18 @@ function build_final_receipt(array $table, array $order, array $items): string {
     $discountAmount = (float)($order['discount_amount'] ?? 0);
     $discountType = $order['discount_type'] ?? 'none';
     $discountValue = (float)($order['discount_value'] ?? 0);
+    $serviceAmount = pos_service_amount($order);
     $lines[] = str_repeat('-', 32);
-    if ($discountAmount > 0) {
+    if ($discountAmount > 0 || $serviceAmount > 0) {
         $lines[] = 'ქვეჯამი: ' . number_format($subtotal, 2) . ' GEL';
+    }
+    if ($discountAmount > 0) {
         $lines[] = 'ფასდაკლება (' . discount_label($discountType, $discountValue) . '): -' . number_format($discountAmount, 2) . ' GEL';
     }
-    $lines[] = 'ჯამი: ' . number_format((float)$order['total'], 2) . ' GEL';
+    if ($serviceAmount > 0) {
+        $lines[] = 'მომსახურება (10%): ' . number_format($serviceAmount, 2) . ' GEL';
+    }
+    $lines[] = ($serviceAmount > 0 ? 'საბოლოო ჯამი: ' : 'ჯამი: ') . number_format((float)$order['total'], 2) . ' GEL';
     $lines[] = 'გადახდა: ' . payment_label($order['payment_type']);
     if ($order['payment_type'] === 'mixed') {
         $lines[] = 'ნაღდი: ' . number_format((float)$order['cash_amount'], 2) . ' GEL';
@@ -378,20 +388,20 @@ function render_footer(): void {
     ];
 
     if ($route === 'day') {
-        $scripts[] = '/assets/close-confirm.js?v=24';
+        $scripts[] = '/assets/close-confirm.js?v=25';
         $scripts[] = '/assets/cash-movement-polish.js?v=3';
     } elseif ($route === 'tables') {
         $scripts[] = '/assets/tables-12.js?v=8';
     } elseif ($route === 'table') {
-        $scripts[] = '/assets/close-confirm.js?v=24';
-        $scripts[] = '/assets/direct-print.js?v=4';
+        $scripts[] = '/assets/close-confirm.js?v=25';
+        $scripts[] = '/assets/direct-print.js?v=5';
         $scripts[] = '/assets/table-cancel.js?v=3';
         $scripts[] = '/assets/table-page-flow.js?v=4';
     } elseif ($route === 'history') {
-        $scripts[] = '/assets/close-confirm.js?v=24';
-        $scripts[] = '/assets/direct-print.js?v=4';
+        $scripts[] = '/assets/close-confirm.js?v=25';
+        $scripts[] = '/assets/direct-print.js?v=5';
     } elseif ($route === 'receipts') {
-        $scripts[] = '/assets/close-confirm.js?v=24';
+        $scripts[] = '/assets/close-confirm.js?v=25';
     }
 
     $scriptHtml = '';
