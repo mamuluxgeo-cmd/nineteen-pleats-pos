@@ -139,6 +139,14 @@ test_equal(audit_payload($badDb)['ok'], false, 'connection error is structured')
 test_assert(strpos($badDb['body'], 'pos_test_missing') === false, 'database identity is not exposed');
 test_assert(!glob($appRoot . '/.runtime-*'), 'pages do not write runtime PHP files');
 
+// A past "to" must not move the lower bound outside a cashier's seven days.
+$oldTable = audit_table($pdo);
+$pdo->prepare("INSERT INTO orders (business_day_id,table_id,user_id,status,total,closed_at) VALUES (?,?,1,'closed',123.45,'2000-01-01 12:00:00')")->execute([$dayId, $oldTable]);
+$oldOrder = (int)$pdo->lastInsertId();
+$oldHistory = audit_request('history-cashier', ['from' => '2000-01-01', 'to' => '2000-01-01', 'table_id' => $oldTable]);
+test_equal($oldHistory['status'], 200, 'out-of-window cashier filters are clamped');
+test_assert(strpos($oldHistory['body'], 'order_id=' . $oldOrder) === false, 'past end date cannot expose an old order');
+
 // Editing/deleting is limited to unsent lines; full cancellation keeps history.
 $editTable = audit_table($pdo);
 $added = audit_payload(audit_request('add', ['table_id' => $editTable, 'product_id' => $productId]));

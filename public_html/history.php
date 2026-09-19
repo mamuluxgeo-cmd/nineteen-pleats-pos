@@ -8,7 +8,6 @@ if (($_SESSION['user']['role'] ?? '') === 'admin') {
     exit;
 }
 
-require_once __DIR__ . '/includes/bootstrap.php';
 require_once __DIR__ . '/includes/reporting.php';
 require_login();
 
@@ -19,8 +18,8 @@ $to = $_GET['to'] ?? $today;
 
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)) $from = $limitFrom;
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) $to = $today;
-if ($from < $limitFrom) $from = $limitFrom;
-if ($to > $today) $to = $today;
+$from = max($limitFrom, min($today, $from));
+$to = max($limitFrom, min($today, $to));
 if ($from > $to) $from = $to;
 
 $tableId = (int)($_GET['table_id'] ?? 0);
