@@ -7,9 +7,10 @@ function ensure_order_numbering(): void {
 
 function ensure_order_receipt_number(int $orderId): int {
     $pdo = db();
+    $ownsTransaction = !$pdo->inTransaction();
 
     try {
-        $pdo->beginTransaction();
+        if ($ownsTransaction) $pdo->beginTransaction();
         $stmt = $pdo->prepare('SELECT receipt_number FROM orders WHERE id=? LIMIT 1 FOR UPDATE');
         $stmt->execute([$orderId]);
         $row = $stmt->fetch();
@@ -19,7 +20,7 @@ function ensure_order_receipt_number(int $orderId): int {
 
         $number = (int)($row['receipt_number'] ?? 0);
         if ($number > 0) {
-            $pdo->commit();
+            if ($ownsTransaction) $pdo->commit();
             return $number;
         }
 
@@ -30,10 +31,10 @@ function ensure_order_receipt_number(int $orderId): int {
         if ($update->rowCount() !== 1) {
             throw new RuntimeException('Receipt number was not assigned.');
         }
-        $pdo->commit();
+        if ($ownsTransaction) $pdo->commit();
         return $number;
     } catch (Throwable $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
+        if ($ownsTransaction && $pdo->inTransaction()) $pdo->rollBack();
         throw $e;
     }
 }

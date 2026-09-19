@@ -1,7 +1,5 @@
 <?php
-if (session_status() !== PHP_SESSION_ACTIVE) {
-    session_start();
-}
+require_once __DIR__ . '/includes/bootstrap.php';
 
 // Keep the administrator history page exactly as it already works.
 if (($_SESSION['user']['role'] ?? '') === 'admin') {
@@ -10,18 +8,18 @@ if (($_SESSION['user']['role'] ?? '') === 'admin') {
     exit;
 }
 
-require __DIR__ . '/includes/bootstrap.php';
+require_once __DIR__ . '/includes/reporting.php';
 require_login();
 
-$today = date('Y-m-d');
-$limitFrom = date('Y-m-d', strtotime('-6 days'));
+$today = garbalia_business_date();
+$limitFrom = garbalia_business_date_shift(-6);
 $from = $_GET['from'] ?? $limitFrom;
 $to = $_GET['to'] ?? $today;
 
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)) $from = $limitFrom;
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) $to = $today;
-if ($from < $limitFrom) $from = $limitFrom;
-if ($to > $today) $to = $today;
+$from = max($limitFrom, min($today, $from));
+$to = max($limitFrom, min($today, $to));
 if ($from > $to) $from = $to;
 
 $tableId = (int)($_GET['table_id'] ?? 0);
@@ -30,8 +28,9 @@ $viewOrderId = (int)($_GET['order_id'] ?? 0);
 $sel = function ($a, $b): string { return (string)$a === (string)$b ? 'selected' : ''; };
 
 $tables = db()->query('SELECT * FROM restaurant_tables WHERE is_active=1 ORDER BY sort_order, id')->fetchAll();
-$where = ['o.status IN ("closed", "cancelled")', 'COALESCE(o.closed_at,o.created_at) BETWEEN ? AND ?'];
-$params = [$from . ' 00:00:00', $to . ' 23:59:59'];
+$where = ['o.status IN ("closed", "cancelled")', pos_report_period()];
+[$periodStart, $periodEnd] = garbalia_business_range($from, $to);
+$params = pos_report_params($periodStart, $periodEnd);
 if ($tableId > 0) {
     $where[] = 'o.table_id=?';
     $params[] = $tableId;
@@ -41,15 +40,20 @@ if ($productSearch !== '') {
     $params[] = '%' . $productSearch . '%';
 }
 
-$sql = 'SELECT o.*, t.name table_name, u.name user_name FROM orders o JOIN restaurant_tables t ON t.id=o.table_id LEFT JOIN users u ON u.id=o.user_id WHERE ' . implode(' AND ', $where) . ' ORDER BY COALESCE(o.closed_at,o.created_at) DESC, o.id DESC LIMIT 300';
+$countStmt = db()->prepare('SELECT COUNT(*) FROM orders o WHERE ' . implode(' AND ', $where));
+$countStmt->execute($params);
+$pageCount = max(1, (int)ceil((int)$countStmt->fetchColumn() / 100));
+$pageNumber = max(1, min($pageCount, (int)($_GET['p'] ?? 1)));
+$sql = 'SELECT o.*, t.name table_name, u.name user_name FROM orders o JOIN restaurant_tables t ON t.id=o.table_id LEFT JOIN users u ON u.id=o.user_id WHERE ' . implode(' AND ', $where) . ' ORDER BY COALESCE(o.closed_at,o.created_at) DESC, o.id DESC LIMIT 100 OFFSET ' . (($pageNumber - 1) * 100);
 $stmt = db()->prepare($sql);
 $stmt->execute($params);
 $orders = $stmt->fetchAll();
 
 $detail = null;
 if ($viewOrderId > 0) {
-    $stmt = db()->prepare('SELECT o.*, t.name table_name, u.name user_name FROM orders o JOIN restaurant_tables t ON t.id=o.table_id LEFT JOIN users u ON u.id=o.user_id WHERE o.id=? AND o.status IN ("closed","cancelled") AND COALESCE(o.closed_at,o.created_at) BETWEEN ? AND ? LIMIT 1');
-    $stmt->execute([$viewOrderId, $limitFrom . ' 00:00:00', $today . ' 23:59:59']);
+    $stmt = db()->prepare('SELECT o.*, t.name table_name, u.name user_name FROM orders o JOIN restaurant_tables t ON t.id=o.table_id LEFT JOIN users u ON u.id=o.user_id WHERE o.id=? AND o.status IN ("closed","cancelled") AND ' . pos_report_period() . ' LIMIT 1');
+    [$detailStart, $detailEnd] = garbalia_business_range($limitFrom, $today);
+    $stmt->execute(array_merge([$viewOrderId], pos_report_params($detailStart, $detailEnd)));
     $detail = $stmt->fetch() ?: null;
 }
 
@@ -62,7 +66,7 @@ render_header('ისტორია');
   <div class="cashier-history-head">
     <div>
       <h1>მაგიდების ისტორია</h1>
-      <p class="cashier-history-note">მოლარის წვდომა — ბოლო 7 დღის ანგარიშების ნახვა და ქვითრის ხელახლა დაბეჭდვა.</p>
+      <p class="cashier-history-note">მოლარის წვდომა: ბოლო 7 ოპერაციული დღე, 04:00–03:59.</p>
     </div>
     <span class="cashier-history-limit"><?= h($limitFrom) ?> — <?= h($today) ?></span>
   </div>
@@ -80,7 +84,7 @@ render_header('ისტორია');
     </form>
     <div class="cashier-history-actions">
       <a class="btn" href="<?= h(url_for('history', ['from'=>$today,'to'=>$today])) ?>">დღეს</a>
-      <a class="btn" href="<?= h(url_for('history', ['from'=>date('Y-m-d', strtotime('-1 day')),'to'=>date('Y-m-d', strtotime('-1 day'))])) ?>">გუშინ</a>
+      <a class="btn" href="<?= h(url_for('history', ['from'=>garbalia_business_date_shift(-1),'to'=>garbalia_business_date_shift(-1)])) ?>">გუშინ</a>
       <a class="btn" href="<?= h(url_for('history', ['from'=>$limitFrom,'to'=>$today])) ?>">ბოლო 7 დღე</a>
     </div>
   </section>
@@ -136,4 +140,5 @@ render_header('ისტორია');
   </section>
 <?php endif; ?>
 </section>
-<?php render_footer();
+<?php if (!$detail) pos_history_pagination($pageNumber, $pageCount);
+render_footer();

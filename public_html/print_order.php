@@ -1,6 +1,6 @@
 <?php
 require __DIR__ . '/includes/bootstrap.php';
-require __DIR__ . '/includes/order-numbers.php';
+require_once __DIR__ . '/includes/order-numbers.php';
 require __DIR__ . '/includes/receipt-templates.php';
 
 require_login();

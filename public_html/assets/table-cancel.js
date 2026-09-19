@@ -121,17 +121,13 @@
       confirmButton.textContent = 'უქმდება…';
 
       try {
-        const response = await fetch('/cancel-table-order.php', {
+        const result = await window.garbaliaActionRequest('/cancel-table-order.php', {
           method: 'POST',
           credentials: 'same-origin',
           cache: 'no-store',
           headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
           body: new FormData(form)
         });
-        const result = await response.json().catch(function () { return null; });
-        if (!response.ok || !result || result.ok !== true) {
-          throw new Error(result && result.message ? result.message : 'გაუქმება ვერ მოხერხდა.');
-        }
         confirmButton.textContent = 'გაუქმდა ✓';
         window.setTimeout(function () {
           window.location.href = result.redirect || '/tables';
@@ -139,7 +135,7 @@
       } catch (error) {
         errorBox.textContent = error && error.message ? error.message : 'გაუქმება ვერ მოხერხდა. სცადე თავიდან.';
         errorBox.classList.add('is-visible');
-        confirmButton.disabled = false;
+        confirmButton.disabled = !!window.garbaliaOutcomeUnknown;
         confirmButton.textContent = 'დიახ, გაუქმება';
       }
     });

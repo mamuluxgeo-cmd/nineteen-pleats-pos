@@ -1,5 +1,6 @@
 <?php
-require __DIR__ . '/includes/bootstrap.php';
+require_once __DIR__ . '/includes/bootstrap.php';
+require_once __DIR__ . '/includes/reporting.php';
 require __DIR__ . '/includes/actions.php';
 
 function setup_page(): void {
@@ -136,7 +137,7 @@ function page_table(): void {
         echo '<hr><h2>მაგიდის დახურვა</h2><form class="close-form" method="post"><input type="hidden" name="action" value="close_order"><input type="hidden" name="table_id" value="'.$tableId.'"><input type="hidden" name="expected_order_id" value="'.$expectedOrderId.'"><label>გადახდის ტიპი<select id="payment_type" name="payment_type"><option value="cash">ნაღდი</option><option value="card">ბარათი</option><option value="mixed">შერეული</option></select></label><div id="mixed_fields" class="mixed-fields"><label>ნაღდი<input name="cash_amount" type="number" step="0.01" min="0"></label><label>ბარათი<input name="card_amount" type="number" step="0.01" min="0"></label></div><button class="btn success">საბოლოო ანგარიში</button></form>';
     }
     echo '</div></section>';
-    echo '<script defer src="/assets/table-fast-actions.js?v=3"></script>';
+    echo '<script defer src="/assets/table-fast-actions.js?v=4"></script>';
     render_footer();
 }
 
@@ -190,8 +191,8 @@ function page_products(): void {
 function page_history(): void {
     require_admin();
     ensure_cash_movements_table();
-    $today = date('Y-m-d');
-    $monthStart = date('Y-m-01');
+    $today = garbalia_business_date();
+    $monthStart = garbalia_business_month_start($today);
     $from = $_GET['from'] ?? $monthStart;
     $to = $_GET['to'] ?? $today;
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)) $from = $monthStart;
@@ -206,8 +207,9 @@ function page_history(): void {
     $sel = fn($a, $b) => (string)$a === (string)$b ? 'selected' : '';
     $tables = db()->query('SELECT * FROM restaurant_tables WHERE is_active=1 ORDER BY sort_order, id')->fetchAll();
     $users = db()->query('SELECT id, name FROM users WHERE is_active=1 ORDER BY role, name')->fetchAll();
-    $where = ['o.status IN ("closed", "cancelled")', 'COALESCE(o.closed_at, o.created_at) BETWEEN ? AND ?'];
-    $params = [$from . ' 00:00:00', $to . ' 23:59:59'];
+    $where = ['o.status IN ("closed", "cancelled")', pos_report_period()];
+    [$periodStart, $periodEnd] = garbalia_business_range($from, $to);
+    $params = pos_report_params($periodStart, $periodEnd);
     if ($tableId > 0) { $where[] = 'o.table_id=?'; $params[] = $tableId; }
     if ($userId > 0) { $where[] = 'o.user_id=?'; $params[] = $userId; }
     if (in_array($payment, ['cash','card','mixed'], true)) { $where[] = 'o.payment_type=?'; $params[] = $payment; }
@@ -215,10 +217,27 @@ function page_history(): void {
     if (in_array($status, ['closed','cancelled'], true)) { $where[] = 'o.status=?'; $params[] = $status; }
     if ($itemFilter === 'cancelled_items') { $where[] = 'EXISTS (SELECT 1 FROM order_items xi WHERE xi.order_id=o.id AND xi.is_cancelled=1)'; }
     if ($productSearch !== '') { $where[] = 'EXISTS (SELECT 1 FROM order_items pi WHERE pi.order_id=o.id AND pi.product_name LIKE ?)'; $params[] = '%' . $productSearch . '%'; }
-    $sql = 'SELECT o.*, t.name table_name, u.name user_name, d.id day_id FROM orders o JOIN restaurant_tables t ON t.id=o.table_id LEFT JOIN users u ON u.id=o.user_id LEFT JOIN business_days d ON d.id=o.business_day_id WHERE ' . implode(' AND ', $where) . ' ORDER BY COALESCE(o.closed_at,o.created_at) DESC, o.id DESC LIMIT 500';
+    $filterSql = implode(' AND ', $where);
+    $feeSql = pos_service_amount_sql('o');
+    $summaryStmt = db()->prepare("SELECT COUNT(*) row_count,
+        COALESCE(SUM(o.status='closed'),0) closed_count, COALESCE(SUM(o.status='cancelled'),0) zero_count,
+        COALESCE(SUM(CASE WHEN o.status='closed' THEN o.total ELSE 0 END),0) sales,
+        COALESCE(SUM(CASE WHEN o.status='closed' THEN o.cash_amount ELSE 0 END),0) cash,
+        COALESCE(SUM(CASE WHEN o.status='closed' THEN o.card_amount ELSE 0 END),0) card,
+        COALESCE(SUM({$feeSql}),0) service_total FROM orders o WHERE " . $filterSql);
+    $summaryStmt->execute($params);
+    $historySummary = $summaryStmt->fetch();
+    $pageCount = max(1, (int)ceil((int)$historySummary['row_count'] / 100));
+    $pageNumber = max(1, min($pageCount, (int)($_GET['p'] ?? 1)));
+    $export = (($_GET['export'] ?? '') === 'excel');
+    $sql = 'SELECT o.*, t.name table_name, u.name user_name, o.business_day_id day_id FROM orders o JOIN restaurant_tables t ON t.id=o.table_id LEFT JOIN users u ON u.id=o.user_id WHERE ' . $filterSql . ' ORDER BY COALESCE(o.closed_at,o.created_at) DESC, o.id DESC';
+    if (!$export) $sql .= ' LIMIT 100 OFFSET ' . (($pageNumber - 1) * 100);
+    // CSV is streamed, so exports include all matching rows without loading
+    // the complete history into PHP memory.
+    if ($export) db()->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, false);
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
-    $orders = $stmt->fetchAll();
+    $orders = $export ? $stmt : $stmt->fetchAll();
     if (($_GET['export'] ?? '') === 'excel') {
         header('Content-Type: text/csv; charset=UTF-8');
         header('Content-Disposition: attachment; filename="garbalia-history-' . $from . '-' . $to . '.csv"');
@@ -232,20 +251,20 @@ function page_history(): void {
         fclose($out);
         exit;
     }
-    $serviceTotal = 0.0;
-    $salesTotal = 0; $cashTotal = 0; $cardTotal = 0; $closedCount = 0; $zeroCount = 0;
-    foreach ($orders as $o) {
-        if ($o['status'] === 'closed') { $serviceTotal += pos_service_amount($o); $closedCount++; $salesTotal += (float)$o['total']; $cashTotal += (float)$o['cash_amount']; $cardTotal += (float)$o['card_amount']; }
-        elseif ($o['status'] === 'cancelled') { $zeroCount++; }
-    }
+    $serviceTotal = (float)$historySummary['service_total'];
+    $salesTotal = (float)$historySummary['sales'];
+    $cashTotal = (float)$historySummary['cash'];
+    $cardTotal = (float)$historySummary['card'];
+    $closedCount = (int)$historySummary['closed_count'];
+    $zeroCount = (int)$historySummary['zero_count'];
     render_header('ისტორია');
     echo '<style>.history-filters{margin-bottom:18px}.history-grid{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:12px;align-items:end}.history-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.status-zero{display:inline-flex;border-radius:999px;background:#ffe5e2;color:#8b1d15;font-weight:900;padding:5px 9px}.status-paid{display:inline-flex;border-radius:999px;background:#e9ffe4;color:#24733c;font-weight:900;padding:5px 9px}.history-detail{margin-bottom:18px}.history-detail-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}.history-detail-grid div{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px}.history-detail-grid span{display:block;color:var(--muted);font-size:.86rem}.history-detail-grid strong{display:block;margin-top:3px}@media(max-width:980px){.history-grid{grid-template-columns:1fr 1fr}}@media(max-width:560px){.history-grid{grid-template-columns:1fr}}</style>';
-    echo '<div class="page-head"><div><h1>მაგიდების ისტორია</h1><p class="muted">მხოლოდ ადმინისტრატორისთვის — დახურული მაგიდები, პროდუქტის ძებნა, მომხმარებელი და Excel ჩამოტვირთვა.</p></div></div>';
+    echo '<div class="page-head"><div><h1>მაგიდების ისტორია</h1><p class="muted">ჯამები მოიცავს მთელ არჩეულ პერიოდს. ოპერაციული დღე: 04:00–03:59.</p></div></div>';
     echo '<section class="card history-filters"><form method="get"><input type="hidden" name="page" value="history"><div class="history-grid"><label>თარიღიდან<input type="date" name="from" value="'.h($from).'"></label><label>თარიღამდე<input type="date" name="to" value="'.h($to).'"></label><label>მაგიდა<select name="table_id"><option value="0">ყველა მაგიდა</option>';
     foreach ($tables as $t) echo '<option value="'.(int)$t['id'].'" '.$sel($tableId, $t['id']).'>'.h($t['name']).'</option>';
     echo '</select></label><label>მომხმარებელი<select name="user_id"><option value="0">ყველა მომხმარებელი</option>';
     foreach ($users as $u) echo '<option value="'.(int)$u['id'].'" '.$sel($userId, $u['id']).'>'.h($u['name']).'</option>';
-    echo '</select></label><label>პროდუქტის ძებნა<input name="product" value="'.h($productSearch).'" placeholder="მაგ: ხინკალი"></label><label>გადახდა<select name="payment"><option value="all" '.$sel($payment,'all').'>ყველა</option><option value="cash" '.$sel($payment,'cash').'>ნაღდი</option><option value="card" '.$sel($payment,'card').'>ბარათი</option><option value="mixed" '.$sel($payment,'mixed').'>შერეული</option><option value="zero" '.$sel($payment,'zero').'>ნულით დახურული</option></select></label><label>სტატუსი<select name="status"><option value="all" '.$sel($status,'all').'>ყველა</option><option value="closed" '.$sel($status,'closed').'>დახურული</option><option value="cancelled" '.$sel($status,'cancelled').'>ნულით დახურული</option></select></label><label>პროდუქტები<select name="item_filter"><option value="all" '.$sel($itemFilter,'all').'>ყველა</option><option value="cancelled_items" '.$sel($itemFilter,'cancelled_items').'>გაუქმებული პროდუქტებით</option></select></label><button class="btn primary">ძებნა</button></div></form><div class="history-actions"><a class="btn" href="'.h(url_for('history',['from'=>$today,'to'=>$today])).'">დღეს</a><a class="btn" href="'.h(url_for('history',['from'=>date('Y-m-d', strtotime('-1 day')),'to'=>date('Y-m-d', strtotime('-1 day'))])).'">გუშინ</a><a class="btn" href="'.h(url_for('history',['from'=>$monthStart,'to'=>$today])).'">ამ თვეში</a><a class="btn success" href="'.h(url_for('history', array_merge($_GET, ['export'=>'excel']))).'">Excel ჩამოტვირთვა</a></div></section>';
+    echo '</select></label><label>პროდუქტის ძებნა<input name="product" value="'.h($productSearch).'" placeholder="მაგ: ხინკალი"></label><label>გადახდა<select name="payment"><option value="all" '.$sel($payment,'all').'>ყველა</option><option value="cash" '.$sel($payment,'cash').'>ნაღდი</option><option value="card" '.$sel($payment,'card').'>ბარათი</option><option value="mixed" '.$sel($payment,'mixed').'>შერეული</option><option value="zero" '.$sel($payment,'zero').'>ნულით დახურული</option></select></label><label>სტატუსი<select name="status"><option value="all" '.$sel($status,'all').'>ყველა</option><option value="closed" '.$sel($status,'closed').'>დახურული</option><option value="cancelled" '.$sel($status,'cancelled').'>ნულით დახურული</option></select></label><label>პროდუქტები<select name="item_filter"><option value="all" '.$sel($itemFilter,'all').'>ყველა</option><option value="cancelled_items" '.$sel($itemFilter,'cancelled_items').'>გაუქმებული პროდუქტებით</option></select></label><button class="btn primary">ძებნა</button></div></form><div class="history-actions"><a class="btn" href="'.h(url_for('history',['from'=>$today,'to'=>$today])).'">დღეს</a><a class="btn" href="'.h(url_for('history',['from'=>garbalia_business_date_shift(-1),'to'=>garbalia_business_date_shift(-1)])).'">გუშინ</a><a class="btn" href="'.h(url_for('history',['from'=>$monthStart,'to'=>$today])).'">ამ თვეში</a><a class="btn success" href="'.h(url_for('history', array_merge($_GET, ['export'=>'excel']))).'">Excel ჩამოტვირთვა</a></div></section>';
     echo '<section class="stats"><div><span>სულ გაყიდვა</span><strong>'.money($salesTotal).'</strong></div><div><span>ნაღდი</span><strong>'.money($cashTotal).'</strong></div><div><span>ბარათი</span><strong>'.money($cardTotal).'</strong></div><div><span>დახურული ანგარიშები</span><strong>'.$closedCount.'</strong></div><div><span>ნულით დახურული</span><strong>'.$zeroCount.'</strong></div></section>';
     echo '<section class="stats"><div><span>პროდუქტები — ფასდაკლების შემდეგ</span><strong>'.money($salesTotal - $serviceTotal).'</strong></div><div><span>მომსახურება</span><strong>'.money($serviceTotal).'</strong></div></section>';
     if ($viewOrderId > 0) {
@@ -274,6 +293,7 @@ function page_history(): void {
         echo '<tr><td>#'.$receiptNumber.'</td><td>#'.(int)$o['day_id'].'</td><td>'.h($o['table_name']).'</td><td>'.h($o['user_name'] ?: '—').'</td><td>'.money($o['total']).'</td><td>'.h($payText).'</td><td>'.$statusHtml.'</td><td>'.h($o['closed_at'] ?: $o['created_at']).'</td><td><a class="btn" href="'.h(url_for('history',['from'=>$from,'to'=>$to,'table_id'=>$tableId,'payment'=>$payment,'status'=>$status,'user_id'=>$userId,'product'=>$productSearch,'item_filter'=>$itemFilter,'order_id'=>(int)$o['id']])).'">ნახვა</a></td></tr>';
     }
     echo '</tbody></table></div></section>';
+    pos_history_pagination($pageNumber, $pageCount);
     render_footer();
 }
 
@@ -296,7 +316,5 @@ try {
         default: redirect_to('day'); break;
     }
 } catch (Throwable $e) {
-    render_header('შეცდომა');
-    echo '<section class="card narrow error"><h1>შეცდომა</h1><p>შეამოწმე config.php და MySQL ბაზის import.</p><pre>'.h($e->getMessage()).'</pre></section>';
-    render_footer();
+    pos_render_error($e);
 }

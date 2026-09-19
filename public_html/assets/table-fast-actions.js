@@ -111,19 +111,12 @@
     }
 
     var data = new FormData(form);
-    fetch('/add-item-fast.php', {
+    window.garbaliaActionRequest('/add-item-fast.php', {
       method: 'POST',
       body: data,
       credentials: 'same-origin',
       cache: 'no-store',
       headers: {'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}
-    }).then(function (response) {
-      return response.json().catch(function () { return null; }).then(function (payload) {
-        if (!response.ok || !payload || payload.ok !== true) {
-          throw new Error(payload && payload.message ? payload.message : 'პროდუქტის დამატება ვერ მოხერხდა.');
-        }
-        return payload;
-      });
     }).then(function (payload) {
       var tableIdInput = form.querySelector('input[name="table_id"]');
       addItemToOrder(payload, tableIdInput ? tableIdInput.value : '');
@@ -142,7 +135,7 @@
     }).catch(function (error) {
       form.dataset.fastAdding = '0';
       if (button) {
-        button.disabled = false;
+        button.disabled = !!window.garbaliaOutcomeUnknown;
         button.textContent = oldText || 'დამატება';
       }
       alert(error && error.message ? error.message : 'პროდუქტის დამატება ვერ მოხერხდა.');

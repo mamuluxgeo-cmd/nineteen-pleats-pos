@@ -4,199 +4,44 @@ require __DIR__ . '/includes/product-cost.php';
 
 require_admin();
 
-$setupWarnings = [];
-try {
-    ensure_order_discount_columns();
-} catch (Throwable $e) {
-    $setupWarnings[] = 'ფასდაკლების მონაცემების ნაწილი დროებით ვერ ჩაიტვირთა.';
-    error_log('GARBALIA statistics discount schema: ' . $e->getMessage());
-}
-try {
-    ensure_product_cost_schema();
-} catch (Throwable $e) {
-    $setupWarnings[] = 'თვითღირებულების სქემის განახლება ვერ დასრულდა; გვერდი ნულოვანი Cost-ით გაგრძელდება.';
-    error_log('GARBALIA statistics cost schema: ' . $e->getMessage());
-}
+require_once __DIR__ . '/includes/reporting.php';
 
 function stat_date_range(string $range): array {
-    $today = date('Y-m-d');
+    $today = garbalia_business_date();
+    $base = new DateTimeImmutable($today . ' 12:00:00');
     switch ($range) {
         case 'today':
             return [$today, $today, 'დღეს'];
         case 'yesterday':
-            $day = date('Y-m-d', strtotime('-1 day'));
+            $day = garbalia_business_date_shift(-1);
             return [$day, $day, 'გუშინ'];
         case 'last7':
-            return [date('Y-m-d', strtotime('-6 day')), $today, 'ბოლო 7 დღე'];
+            return [garbalia_business_date_shift(-6), $today, 'ბოლო 7 დღე'];
         case 'prev_month':
-            return [date('Y-m-01', strtotime('first day of previous month')), date('Y-m-t', strtotime('last day of previous month')), 'წინა თვე'];
+            return [$base->modify('first day of previous month')->format('Y-m-01'), $base->modify('first day of previous month')->format('Y-m-t'), 'წინა თვე'];
         case 'year':
-            return [date('Y-01-01'), $today, 'ამ წელს'];
+            return [$base->format('Y-01-01'), $today, 'ამ წელს'];
         default:
-            return [date('Y-m-01'), $today, 'ამ თვეში'];
+            return [garbalia_business_month_start($today), $today, 'ამ თვეში'];
     }
 }
 
-function sales_between(string $from, string $to): array {
-    $stmt = db()->prepare("SELECT COUNT(*) orders_count, COALESCE(SUM(total),0) total FROM orders WHERE status='closed' AND COALESCE(closed_at,created_at) BETWEEN ? AND ?");
-    $stmt->execute([$from . ' 00:00:00', $to . ' 23:59:59']);
-    $row = $stmt->fetch() ?: [];
-    return [
-        'orders_count' => (int)($row['orders_count'] ?? 0),
-        'total' => (float)($row['total'] ?? 0),
-    ];
-}
-
-$range = $_GET['range'] ?? 'month';
+$setupWarnings = [];
+$range = (string)($_GET['range'] ?? 'month');
 [$from, $to, $rangeLabel] = stat_date_range($range);
-$startDateTime = $from . ' 00:00:00';
-$endDateTime = $to . ' 23:59:59';
-
-$hasProductCost = true;
-$hasDiscountAmount = true;
-$hasCashMovements = true;
-
-$discountSelect = $hasDiscountAmount ? 'COALESCE(discount_amount,0) discount_amount' : '0 discount_amount';
-$stmt = db()->prepare("SELECT id, table_id, status, subtotal_total, total, {$discountSelect} FROM orders WHERE status='closed' AND COALESCE(closed_at,created_at) BETWEEN ? AND ?");
-$stmt->execute([$startDateTime, $endDateTime]);
-$orders = $stmt->fetchAll();
-
-$orderMap = [];
-$orderGross = [];
-$orderCost = [];
-$revenue = 0.0;
-$serviceTotal = 0.0;
-$discounts = 0.0;
-foreach ($orders as $order) {
-    $orderId = (int)$order['id'];
-    $orderMap[$orderId] = $order;
-    $orderMap[$orderId]['service_amount'] = pos_service_amount($order);
-    $orderGross[$orderId] = 0.0;
-    $orderCost[$orderId] = 0.0;
-    $revenue += (float)$order['total'];
-    $serviceTotal += $orderMap[$orderId]['service_amount'];
-    $discounts += (float)$order['discount_amount'];
-}
-
-$items = [];
-if ($orders) {
-    $costSelect = $hasProductCost ? 'COALESCE(oi.product_cost,0)' : '0';
-    $stmt = db()->prepare("SELECT oi.order_id, oi.product_name, oi.quantity, oi.price, {$costSelect} product_cost
-        FROM order_items oi
-        JOIN orders o ON o.id=oi.order_id
-        WHERE o.status='closed' AND oi.is_cancelled=0
-          AND COALESCE(o.closed_at,o.created_at) BETWEEN ? AND ?
-        ORDER BY oi.order_id, oi.id");
-    $stmt->execute([$startDateTime, $endDateTime]);
-    $items = $stmt->fetchAll();
-}
-
-$costTotal = 0.0;
-$zeroCostLines = 0;
-foreach ($items as $item) {
-    $orderId = (int)$item['order_id'];
-    $quantity = (float)$item['quantity'];
-    $gross = $quantity * (float)$item['price'];
-    $cost = $quantity * (float)$item['product_cost'];
-    $orderGross[$orderId] = ($orderGross[$orderId] ?? 0) + $gross;
-    $orderCost[$orderId] = ($orderCost[$orderId] ?? 0) + $cost;
-    $costTotal += $cost;
-    if ((float)$item['product_cost'] <= 0) $zeroCostLines++;
-}
-
-if (!$hasDiscountAmount) {
-    $discounts = 0.0;
-    foreach ($orders as $order) {
-        $orderId = (int)$order['id'];
-        $discounts += max(0, ($orderGross[$orderId] ?? 0) - (float)$order['total']);
-    }
-}
-
-$expenses = 0.0;
-if ($hasCashMovements) {
-    try {
-        $stmt = db()->prepare("SELECT COALESCE(SUM(amount),0) FROM cash_movements WHERE type='expense' AND created_at BETWEEN ? AND ?");
-        $stmt->execute([$startDateTime, $endDateTime]);
-        $expenses = (float)$stmt->fetchColumn();
-    } catch (Throwable $e) {
-        $setupWarnings[] = 'ხარჯების მონაცემები დროებით ვერ ჩაიტვირთა.';
-        error_log('GARBALIA statistics expenses: ' . $e->getMessage());
-    }
-}
-
-$productStats = [];
-foreach ($items as $item) {
-    $orderId = (int)$item['order_id'];
-    if (!isset($orderMap[$orderId])) continue;
-    $name = trim((string)$item['product_name']);
-    if ($name === '') $name = 'პროდუქტი';
-    if (!isset($productStats[$name])) {
-        $productStats[$name] = ['product_name' => $name, 'qty' => 0.0, 'net_sales' => 0.0, 'cost_total' => 0.0];
-    }
-    $quantity = (float)$item['quantity'];
-    $gross = $quantity * (float)$item['price'];
-    $orderGrossTotal = (float)($orderGross[$orderId] ?? 0);
-    // Service is not a product sale and must not inflate product profitability.
-    $orderRevenue = (float)$orderMap[$orderId]['total'] - (float)$orderMap[$orderId]['service_amount'];
-    $factor = $orderGrossTotal > 0 ? ($orderRevenue / $orderGrossTotal) : 0;
-    $productStats[$name]['qty'] += $quantity;
-    $productStats[$name]['net_sales'] += $gross * $factor;
-    $productStats[$name]['cost_total'] += $quantity * (float)$item['product_cost'];
-}
-$topProducts = array_values($productStats);
-usort($topProducts, function (array $a, array $b): int {
-    $profitA = (float)$a['net_sales'] - (float)$a['cost_total'];
-    $profitB = (float)$b['net_sales'] - (float)$b['cost_total'];
-    if (abs($profitA - $profitB) > 0.0001) return $profitA < $profitB ? 1 : -1;
-    if (abs((float)$a['qty'] - (float)$b['qty']) > 0.0001) return (float)$a['qty'] < (float)$b['qty'] ? 1 : -1;
-    return strcmp((string)$a['product_name'], (string)$b['product_name']);
-});
-$topProducts = array_slice($topProducts, 0, 20);
-
-$stmt = db()->query('SELECT id, name, sort_order FROM restaurant_tables WHERE is_active=1 ORDER BY sort_order,id');
-$tableStats = [];
-$tableIndex = [];
-foreach ($stmt->fetchAll() as $table) {
-    $tableId = (int)$table['id'];
-    $tableIndex[$tableId] = count($tableStats);
-    $tableStats[] = [
-        'table_name' => $table['name'],
-        'sort_order' => (int)$table['sort_order'],
-        'orders_count' => 0,
-        'total' => 0.0,
-        'cost_total' => 0.0,
-        'gross_profit' => 0.0,
-    ];
-}
-foreach ($orders as $order) {
-    $tableId = (int)$order['table_id'];
-    if (!isset($tableIndex[$tableId])) continue;
-    $index = $tableIndex[$tableId];
-    $orderId = (int)$order['id'];
-    $orderRevenue = (float)$order['total'];
-    $currentCost = (float)($orderCost[$orderId] ?? 0);
-    $tableStats[$index]['orders_count']++;
-    $tableStats[$index]['total'] += $orderRevenue;
-    $tableStats[$index]['cost_total'] += $currentCost;
-    $tableStats[$index]['gross_profit'] += $orderRevenue - $currentCost;
-}
-usort($tableStats, function (array $a, array $b): int {
-    if ((int)$a['orders_count'] !== (int)$b['orders_count']) return (int)$a['orders_count'] < (int)$b['orders_count'] ? 1 : -1;
-    if (abs((float)$a['total'] - (float)$b['total']) > 0.0001) return (float)$a['total'] < (float)$b['total'] ? 1 : -1;
-    return (int)$a['sort_order'] <=> (int)$b['sort_order'];
-});
-
-$ordersCount = count($orders);
+[$startDateTime, $endDateTime] = garbalia_business_range($from, $to);
+$stats = pos_statistics($startDateTime, $endDateTime);
+extract($stats, EXTR_SKIP);
 $grossProfit = $revenue - $costTotal;
 $grossMargin = $revenue > 0 ? ($grossProfit / $revenue * 100) : 0.0;
 $netResult = $grossProfit - $expenses;
 $averageCheck = $ordersCount > 0 ? $revenue / $ordersCount : 0.0;
 $marginText = number_format($grossMargin, 1) . '%';
-
-$todaySales = sales_between(date('Y-m-d'), date('Y-m-d'));
-$yesterdaySales = sales_between(date('Y-m-d', strtotime('-1 day')), date('Y-m-d', strtotime('-1 day')));
-$monthSales = sales_between(date('Y-m-01'), date('Y-m-d'));
-$prevMonthSales = sales_between(date('Y-m-01', strtotime('first day of previous month')), date('Y-m-t', strtotime('last day of previous month')));
+$quick = pos_quick_sales();
+$todaySales = ['total' => $quick['today']];
+$yesterdaySales = ['total' => $quick['yesterday']];
+$monthSales = ['total' => $quick['month']];
+$prevMonthSales = ['total' => $quick['prev_month']];
 
 $rangeUrl = function (string $value): string {
     return h(url_for('statistics', ['range' => $value]));
@@ -211,7 +56,7 @@ render_header('სტატისტიკა');
   <div class="statistics-head">
     <div>
       <h1>სტატისტიკა</h1>
-      <p class="statistics-sub">გაყიდვა, პროდუქტის თვითღირებულება და რეალური ფინანსური შედეგი არჩეული პერიოდის მიხედვით.</p>
+      <p class="statistics-sub">გაყიდვა, პროდუქტის თვითღირებულება და რეალური ფინანსური შედეგი არჩეული პერიოდის მიხედვით. ოპერაციული დღე: 04:00–03:59.</p>
     </div>
     <div class="stats-range">
       <a class="btn <?= $range==='today'?'active':'' ?>" href="<?= $rangeUrl('today') ?>">დღეს</a>
@@ -296,4 +141,7 @@ render_header('სტატისტიკა');
     </div>
   </section>
 </section>
+<script>
+setTimeout(function () { window.location.reload(); }, <?= max(1000, (garbalia_next_business_cutoff_timestamp() - time() + 2) * 1000) ?>);
+</script>
 <?php render_footer();

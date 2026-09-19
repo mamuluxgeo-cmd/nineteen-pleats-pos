@@ -13,6 +13,10 @@ return [
     'db_user' => 'CHANGE_DATABASE_USER',
     'db_pass' => 'CHANGE_DATABASE_PASSWORD',
     'db_charset' => 'utf8mb4',
+    'db_lock_wait_seconds' => 3,
+    'db_statement_seconds' => 8,
+    'slow_request_ms' => 1000,
+    'slow_query_ms' => 300,
 
     'cancel_password' => 'cancel123',
 ];

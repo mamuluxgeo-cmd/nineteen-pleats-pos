@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS cash_movements (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_cash_movements_day FOREIGN KEY (business_day_id) REFERENCES business_days(id) ON DELETE CASCADE,
   CONSTRAINT fk_cash_movements_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+  KEY idx_cash_type_created (type, created_at),
   KEY idx_cash_day (business_day_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -107,6 +108,7 @@ CREATE TABLE IF NOT EXISTS orders (
   KEY idx_orders_status (status),
   KEY idx_orders_day (business_day_id),
   KEY idx_orders_day_table_status (business_day_id, table_id, status, id),
+  KEY idx_orders_day_status_table (business_day_id, status, table_id, id),
   KEY idx_orders_status_closed (status, closed_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

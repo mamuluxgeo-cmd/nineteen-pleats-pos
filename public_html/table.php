@@ -112,10 +112,8 @@ try {
     }
 
     echo '</div></section>';
-    echo '<script defer src="/assets/table-fast-actions.js?v=3"></script>';
+    echo '<script defer src="/assets/table-fast-actions.js?v=4"></script>';
     render_footer();
 } catch (Throwable $e) {
-    render_header('შეცდომა');
-    echo '<section class="card narrow error"><h1>შეცდომა</h1><p>მაგიდის ჩატვირთვა ვერ მოხერხდა.</p><pre>'.h($e->getMessage()).'</pre></section>';
-    render_footer();
+    pos_render_error($e);
 }

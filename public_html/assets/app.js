@@ -314,17 +314,17 @@ function showGarbaliaConfirm(options) {
     : '';
   overlay.innerHTML = '<div class="garbalia-confirm-dialog" role="dialog" aria-modal="true"><button type="button" class="garbalia-confirm-close" aria-label="დახურვა">×</button><img class="garbalia-confirm-bg-logo" src="/Logo.png?v=12" alt=""><img class="garbalia-confirm-mini" src="/Logo.png?v=12" alt="GARBALIA"><h3>' + escapeHtml(options.title || 'დადასტურება') + '</h3><p>' + escapeHtml(options.message || '') + '</p>' + infoHtml + '<div class="garbalia-confirm-actions"><button type="button" class="btn light" data-garbalia-cancel>' + escapeHtml(options.cancelText || 'არა') + '</button><button type="button" class="btn ' + escapeHtml(options.confirmClass || 'danger') + '" data-garbalia-confirm>' + escapeHtml(options.confirmText || 'დიახ') + '</button></div></div>';
   document.body.appendChild(overlay);
-  const close = function () { overlay.remove(); };
+  const close = function () { overlay.remove(); document.removeEventListener('keydown', escHandler); };
   const confirmButton = overlay.querySelector('[data-garbalia-confirm]');
   overlay.querySelector('.garbalia-confirm-close').addEventListener('click', close);
   overlay.querySelector('[data-garbalia-cancel]').addEventListener('click', close);
   overlay.addEventListener('click', function (event) { if (event.target === overlay) close(); });
-  document.addEventListener('keydown', function escHandler(event) {
+  function escHandler(event) {
     if (event.key === 'Escape') {
       close();
-      document.removeEventListener('keydown', escHandler);
     }
-  });
+  }
+  document.addEventListener('keydown', escHandler);
   confirmButton.addEventListener('click', function () {
     close();
     if (typeof options.onConfirm === 'function') options.onConfirm();

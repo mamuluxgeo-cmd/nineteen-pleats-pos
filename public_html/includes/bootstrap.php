@@ -1,25 +1,31 @@
 <?php
+require_once __DIR__ . '/diagnostics.php';
+$sessionStarted = microtime(true);
 if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
+$GLOBALS['pos_metrics']['session_ms'] = (microtime(true) - $sessionStarted) * 1000;
 
 $configFile = __DIR__ . '/../config.php';
 if (!file_exists($configFile)) {
     $configFile = __DIR__ . '/../config.example.php';
 }
-$config = require $configFile;
+// Also works when an entrypoint includes bootstrap from a function scope.
+$GLOBALS['config'] = require $configFile;
+$config = $GLOBALS['config'];
 date_default_timezone_set($config['timezone'] ?? 'Asia/Tbilisi');
 require_once __DIR__ . '/service-charge.php';
+require_once __DIR__ . '/business-day.php';
 
-// GET requests only need to read the authenticated user. Release PHP's session
+// Requests only need to read the authenticated user. Release PHP's session
 // file lock immediately so a slow DB/page request cannot block another click,
 // tab or AJAX request from the same POS terminal. Preserve one-time flash data.
 // Logout is the exception because it must destroy the active session.
 $GLOBALS['garbalia_flash_snapshot'] = null;
 $requestPath = (string)(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
 $isLogoutRequest = (($_GET['page'] ?? '') === 'logout') || preg_match('#/logout/?$#', $requestPath);
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && !$isLogoutRequest && session_status() === PHP_SESSION_ACTIVE) {
-    if (!empty($_SESSION['flash'])) {
+if (!$isLogoutRequest && session_status() === PHP_SESSION_ACTIVE) {
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET' && !empty($_SESSION['flash'])) {
         $GLOBALS['garbalia_flash_snapshot'] = $_SESSION['flash'];
         unset($_SESSION['flash']);
     }
@@ -75,6 +81,7 @@ function flash(string $message, string $type = 'flash'): void {
         session_start();
     }
     $_SESSION['flash'] = ['message' => $message, 'type' => $type];
+    session_write_close();
 }
 
 function db(): PDO {
@@ -83,12 +90,32 @@ function db(): PDO {
         return $pdo;
     }
     $dsn = 'mysql:host=' . cfg('db_host', 'localhost') . ';dbname=' . cfg('db_name') . ';charset=' . cfg('db_charset', 'utf8mb4');
-    $pdo = new PDO($dsn, cfg('db_user'), cfg('db_pass'), [
+    if (cfg('db_port')) $dsn .= ';port=' . (int)cfg('db_port');
+    $started = microtime(true);
+    try {
+    $connection = new PosPDO($dsn, cfg('db_user'), cfg('db_pass'), [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_TIMEOUT => 5,
         PDO::ATTR_PERSISTENT => false,
+        PDO::ATTR_STATEMENT_CLASS => [PosStatement::class],
     ]);
+    } catch (PDOException $error) {
+        pos_record_error($error);
+        throw $error;
+    } finally {
+        $GLOBALS['pos_metrics']['connect_ms'] += (microtime(true) - $started) * 1000;
+    }
+    // Connection timeout does not bound row/metadata lock waits. Limits apply
+    // only to this connection; no server-global settings or runtime DDL.
+    $lockSeconds = max(1, min(10, (int)cfg('db_lock_wait_seconds', 3)));
+    $statementSeconds = max(1, min(30, (int)cfg('db_statement_seconds', 8)));
+    $version = (string)$connection->getAttribute(PDO::ATTR_SERVER_VERSION);
+    $limit = stripos($version, 'MariaDB') !== false
+        ? ', max_statement_time=' . $statementSeconds
+        : ', max_execution_time=' . ($statementSeconds * 1000);
+    $connection->exec('SET SESSION innodb_lock_wait_timeout=' . $lockSeconds . ', lock_wait_timeout=' . $lockSeconds . $limit);
+    $pdo = $connection;
     return $pdo;
 }
 
@@ -106,6 +133,12 @@ function is_admin(): bool {
 
 function require_login(): void {
     if (!is_logged_in()) {
+        if (pos_wants_json()) {
+            http_response_code(401);
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode(['ok' => false, 'message' => 'სესია დასრულდა. ხელახლა შედი სისტემაში.'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
         redirect_to('login');
     }
 }
@@ -191,18 +224,19 @@ function create_order(int $dayId, int $tableId): int {
     $uid = current_user()['id'] ?? null;
     $pdo = db();
 
+    $ownsTransaction = !$pdo->inTransaction();
     try {
-        $pdo->beginTransaction();
+        if ($ownsTransaction) $pdo->beginTransaction();
         $pdo->exec('INSERT INTO order_number_sequence () VALUES ()');
         $receiptNumber = (int)$pdo->lastInsertId();
 
         $stmt = $pdo->prepare("INSERT INTO orders (receipt_number, business_day_id, table_id, user_id, status) VALUES (?, ?, ?, ?, 'open')");
         $stmt->execute([$receiptNumber, $dayId, $tableId, $uid]);
         $orderId = (int)$pdo->lastInsertId();
-        $pdo->commit();
+        if ($ownsTransaction) $pdo->commit();
         return $orderId;
     } catch (Throwable $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
+        if ($ownsTransaction && $pdo->inTransaction()) $pdo->rollBack();
         throw $e;
     }
 }
@@ -353,8 +387,10 @@ function garbalia_mark_svg(): string {
 }
 
 function render_header(string $title): void {
+    $GLOBALS['pos_header_rendered'] = true;
+    if (!headers_sent()) header('Cache-Control: no-store');
     $sub = is_logged_in() ? role_label(current_user()['role']) : 'Restaurant Management System';
-    echo '<!doctype html><html lang="ka"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>GARBALIA</title><link rel="icon" type="image/png" href="/Logo.png"><link rel="shortcut icon" type="image/png" href="/Logo.png"><link rel="apple-touch-icon" href="/Logo.png"><link rel="stylesheet" href="/assets/style.css?v=26"><link rel="stylesheet" href="/assets/mobile-polish.css?v=2"></head><body class="app-shell">';
+    echo '<!doctype html><html lang="ka"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>GARBALIA</title><link rel="icon" type="image/png" href="/Logo.png"><link rel="shortcut icon" type="image/png" href="/Logo.png"><link rel="apple-touch-icon" href="/Logo.png"><link rel="stylesheet" href="/assets/style.css?v=26"><link rel="stylesheet" href="/assets/mobile-polish.css?v=2"></head><body class="app-shell" data-business-date="' . h(garbalia_business_date()) . '">';
     echo '<header class="topbar"><a class="brand garbalia-brand" href="' . h(url_for('day')) . '"><span class="garbalia-mark">' . garbalia_mark_svg() . '</span><span class="brand-text"><strong class="garbalia-word">GARBALIA POS</strong><small>' . h($sub) . '</small></span></a>';
     if (is_logged_in()) {
         echo '<nav class="nav"><a href="' . h(url_for('day')) . '">დღე</a><a href="' . h(url_for('tables')) . '">მაგიდები</a>';
@@ -382,26 +418,26 @@ function garbalia_request_route(): string {
 function render_footer(): void {
     $route = garbalia_request_route();
     $scripts = [
-        '/assets/app.js?v=26',
-        '/assets/app-loader.js?v=27',
+        '/assets/app.js?v=29',
+        '/assets/app-loader.js?v=29',
         '/assets/pwa-install.js?v=4',
     ];
 
     if ($route === 'day') {
-        $scripts[] = '/assets/close-confirm.js?v=25';
+        $scripts[] = '/assets/close-confirm.js?v=26';
         $scripts[] = '/assets/cash-movement-polish.js?v=3';
     } elseif ($route === 'tables') {
         $scripts[] = '/assets/tables-12.js?v=8';
     } elseif ($route === 'table') {
-        $scripts[] = '/assets/close-confirm.js?v=25';
-        $scripts[] = '/assets/direct-print.js?v=5';
-        $scripts[] = '/assets/table-cancel.js?v=3';
+        $scripts[] = '/assets/close-confirm.js?v=26';
+        $scripts[] = '/assets/direct-print.js?v=6';
+        $scripts[] = '/assets/table-cancel.js?v=4';
         $scripts[] = '/assets/table-page-flow.js?v=4';
     } elseif ($route === 'history') {
-        $scripts[] = '/assets/close-confirm.js?v=25';
-        $scripts[] = '/assets/direct-print.js?v=5';
+        $scripts[] = '/assets/close-confirm.js?v=26';
+        $scripts[] = '/assets/direct-print.js?v=6';
     } elseif ($route === 'receipts') {
-        $scripts[] = '/assets/close-confirm.js?v=25';
+        $scripts[] = '/assets/close-confirm.js?v=26';
     }
 
     $scriptHtml = '';
