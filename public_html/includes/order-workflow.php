@@ -5,7 +5,7 @@ require_once __DIR__ . '/order-numbers.php';
 // day takes its exclusive lock and waits for in-flight operations to finish.
 function pos_locked_day(PDO $pdo, bool $exclusive = false): array {
     $stmt = $pdo->query("SELECT * FROM business_days WHERE status='open' ORDER BY id DESC LIMIT 1 "
-        . ($exclusive ? 'FOR UPDATE' : 'LOCK IN SHARE MODE'));
+        . ($exclusive ? 'FOR UPDATE' : ''));
     $day = $stmt->fetch();
     if (!$day) throw new InvalidArgumentException('სამუშაო დღე დახურულია.');
     return $day;
